@@ -187,7 +187,7 @@
 
   <script>
     // ====== CONFIG ======
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5aEFWqev7IulIgcN_bJlOp6yvr34owFIYXAuam27PrHIm66CHeUI9mvV3VZUBFyEeuQ/exec"; // opcional: pega tu URL de Web App para sincronizar
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxkKE-2bemV6FCEouSsfLCJhLL5FPxACZpyJqQBFzL7uf-5tURaPSUNygmQPvsnV9sLTg/exec"; // opcional: pega tu URL de Web App para sincronizar
 
     // ====== MAPA ======
     const map = L.map('map', { zoomControl: true });
@@ -518,9 +518,7 @@ async function capFin(){
 async function syncToSheet(pendientes){
   if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
   const payload = { records: pendientes };
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
-  });
+  const res = await fetch(APPS_SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) });
   if(!res.ok) throw new Error("HTTP "+res.status);
   return await res.json();
 }
