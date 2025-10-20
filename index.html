@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <link rel="icon" href="data:,">
-  <title>Captura de Brechas (Móvil)</title>
+  <title>Captura de Brechas (Cloudflare API)</title>
 
-  <!-- Leaflet (sin integrity/crossorigin para evitar SRI mismatch) -->
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="icon" href="data:,">
 
   <style>
     :root{
@@ -47,7 +47,8 @@
       border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px
     }
     .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;
-      background:#183055;color:#e6f0ff;width:100%;font-weight:700}
+      background:#183055;color:#e6f0ff;width:100%;font-weight:700;cursor:pointer}
+    .btn[disabled]{opacity:.7;cursor:not-allowed}
     .btn-primary{background:var(--accent);color:#051423}
     .btn-ok{background:var(--ok);color:#06240e}
     .btn-warn{background:var(--warn);color:#2b0d02}
@@ -65,18 +66,19 @@
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px}
     .grid{display:grid;gap:8px}
     img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:transform .2s ease}
-
-    /* Popup content */
+    img.preview:hover{transform:scale(1.05)}
     .popup-title{font-weight:800;margin-bottom:4px}
     .popup-meta{font-size:12px;color:#9fb3c7}
     .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
-  img.preview:hover{transform:scale(1.05)}
-  
+
+    /* Pending banner + toasts */
     .pending-banner{position:fixed;left:0;right:0;bottom:0;z-index:1500;
       background:#2a1d0b;color:#ffe7c2;border-top:1px solid #4b2e0f;
       padding:8px 12px;font-size:13px;display:none}
     .pending-banner strong{color:#ffd39a}
-
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:2200;
+      background:#0e1729;color:#eaf2ff;border:1px solid #203153;border-radius:10px;
+      padding:10px 14px;box-shadow:var(--shadow);display:none}
   </style>
 </head>
 <body>
@@ -91,6 +93,7 @@
 
   <div id="map"></div>
   <div id="pendingBanner" class="pending-banner">Tienes <strong id="pendingCount">0</strong> reporte(s) pendientes de sincronizar.</div>
+  <div id="toast" class="toast"></div>
 
   <!-- Floating Action -->
   <button id="newTramo" class="fab">+ Nuevo tramo</button>
@@ -187,7 +190,8 @@
 
   <script>
     // ====== CONFIG ======
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxkKE-2bemV6FCEouSsfLCJhLL5FPxACZpyJqQBFzL7uf-5tURaPSUNygmQPvsnV9sLTg/exec"; // opcional: pega tu URL de Web App para sincronizar
+    // Apunta a tu Cloudflare Pages Function (mismo dominio) para evitar CORS con Apps Script
+    const APPS_SCRIPT_URL = "/api/sync";
 
     // ====== MAPA ======
     const map = L.map('map', { zoomControl: true });
@@ -214,14 +218,12 @@
         sector:"", subestacion:"", circuito:"", tipo:"Apertura",
         inicio:null, fin:null, fotoInicio:null, fotoFin:null
       },
-      items: [], layers: []
-    , mkInicioTemp:null, mkFinTemp:null };
+      items: [], layers: [], mkInicioTemp:null, mkFinTemp:null
+    };
 
     // cargar items de localStorage
     try{ state.items = JSON.parse(localStorage.getItem("brechas_items")||"[]"); }catch{}
-    renderAll();
-      updatePendingUI();
-    updatePendingUI();
+    renderAll(); updatePendingUI();
 
     // ====== Utiles ======
     function openSheet(){ sheet.classList.add("open"); }
@@ -242,6 +244,7 @@
       r.onload = ()=> resolve(r.result);
       r.onerror = reject; r.readAsDataURL(file);
     });}
+    function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none', 2500); }
 
     async function getGPS(){
       return new Promise((resolve,reject)=>{
@@ -252,7 +255,6 @@
       });
     }
 
-    
     function markerPopupHtml(p, titulo, fotoDataUrl, meta){
       const imgHtml = fotoDataUrl
         ? '<img class="popup-img" src="'+fotoDataUrl+'" alt="foto"/>'
@@ -266,23 +268,19 @@
         </div>`;
     }
 
-
     function drawItem(it, fit=false){
       const col = tipoColor(it.tipo);
       const line = L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]], { color:col, weight:5, opacity:.95 });
       addLayer(line);
 
       const mkIni = L.circleMarker([it.inicio.lat,it.inicio.lng], { radius:7, color:col, fillColor:col, fillOpacity:.95 });
-      mkIni.bindPopup(()=> markerPopupHtml(it.inicio, `INICIO — ${it.circuito}`, it.fotoInicio,
-        `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
+      mkIni.bindPopup(() => markerPopupHtml(it.inicio, `INICIO — ${it.circuito}`, (it.fotoInicioUrl||it.fotoInicio), `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
       addLayer(mkIni);
 
       const mkFin = L.circleMarker([it.fin.lat,it.fin.lng], { radius:7, color:col, fillColor:col, fillOpacity:.95 });
-      mkFin.bindPopup(()=> markerPopupHtml(it.fin, `FINAL — ${it.circuito}`, it.fotoFin,
-        `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
+      mkFin.bindPopup(() => markerPopupHtml(it.fin, `FINAL — ${it.circuito}`, (it.fotoFinUrl||it.fotoFin), `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
       addLayer(mkFin);
 
-      // Click en la línea abre resumen
       line.on("click", ()=> {
         const mid = [(it.inicio.lat+it.fin.lat)/2, (it.inicio.lng+it.fin.lng)/2];
         const html = `
@@ -292,8 +290,8 @@
             <div class="popup-meta">${new Date(it.createdAt).toLocaleString()}</div>
             <div class="popup-meta">Inicio: ${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}</div>
             <div class="popup-meta">Final: ${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}</div>
-            ${ (it.fotoInicioUrl||it.fotoInicio) ? `<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="${it.fotoInicioUrl||it.fotoInicio}"/>` : ''}
-            ${ (it.fotoFinUrl||it.fotoFin) ? `<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="${it.fotoFinUrl||it.fotoFin}"/>` : ''}
+            ${(it.fotoInicioUrl||it.fotoInicio) ? `<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="${it.fotoInicioUrl||it.fotoInicio}"/>` : ''}
+            ${(it.fotoFinUrl||it.fotoFin) ? `<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="${it.fotoFinUrl||it.fotoFin}"/>` : ''}
           </div>`;
         L.popup().setLatLng(mid).setContent(html).openOn(map);
       });
@@ -335,7 +333,6 @@
 
     async function validateStep2(){
       if(!state.actual.inicio){
-        // intentar capturar si no lo ha hecho
         try { await capInicio(); } catch {}
       }
       const f = $("fotoInicio").files[0];
@@ -356,7 +353,6 @@
       return true;
     }
 
-    
     function fillResumen(){
       const it = state.actual;
       const col = tipoColor(it.tipo);
@@ -376,76 +372,51 @@
       addLine('Inicio', it.inicio ? (it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6)) : '-');
       addLine('Final', it.fin ? (it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6)) : '-');
 
-      // Foto inicio
       wrap.appendChild(document.createElement('div')).innerHTML = '<b>Foto inicio:</b>';
       if (it.fotoInicio) {
         const img = document.createElement('img');
-        img.className = 'preview';
-        img.alt = 'Foto inicio';
-        img.src = it.fotoInicio;
+        img.className = 'preview'; img.alt = 'Foto inicio'; img.src = it.fotoInicio;
         wrap.appendChild(img);
-      } else {
-        const n = document.createElement('div');
-        n.className = 'note';
-        n.textContent = 'Sin foto';
-        wrap.appendChild(n);
-      }
+      } else { const n = document.createElement('div'); n.className='note'; n.textContent='Sin foto'; wrap.appendChild(n); }
 
-      // Foto final
       wrap.appendChild(document.createElement('div')).innerHTML = '<b>Foto final:</b>';
       if (it.fotoFin) {
         const img = document.createElement('img');
-        img.className = 'preview';
-        img.alt = 'Foto final';
-        img.src = it.fotoFin;
+        img.className = 'preview'; img.alt = 'Foto final'; img.src = it.fotoFin;
         wrap.appendChild(img);
-      } else {
-        const n = document.createElement('div');
-        n.className = 'note';
-        n.textContent = 'Sin foto';
-        wrap.appendChild(n);
-      }
+      } else { const n = document.createElement('div'); n.className='note'; n.textContent='Sin foto'; wrap.appendChild(n); }
 
       const cont = document.getElementById('resumen');
-      cont.innerHTML = '';
-      cont.appendChild(wrap);
+      cont.innerHTML = ''; cont.appendChild(wrap);
     }
 
-    // ====== Capturas
-    
-async function capInicio(){
-  const p = await getGPS();
-  state.actual.inicio = p;
-  // Elimina marcador temporal anterior si existe
-  if (state.mkInicioTemp) { try { map.removeLayer(state.mkInicioTemp); } catch(_){} }
-  // Marcador DRAGGABLE para ajustar precisión
-  const mk = L.marker([p.lat,p.lng], { title:"Inicio (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar inicio");
-  mk.on("dragend", (e)=>{
-    const ll = e.target.getLatLng();
-    state.actual.inicio = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
-  });
-  addLayer(mk);
-  state.mkInicioTemp = mk;
-  mk.openPopup();
-}
+    // ====== Capturas con marcadores ajustables
+    async function capInicio(){
+      const p = await getGPS();
+      state.actual.inicio = p;
+      if (state.mkInicioTemp) { try { map.removeLayer(state.mkInicioTemp); } catch(_){} }
+      const mk = L.marker([p.lat,p.lng], { title:"Inicio (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar inicio");
+      mk.on("dragend", (e)=>{
+        const ll = e.target.getLatLng();
+        state.actual.inicio = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
+      });
+      addLayer(mk);
+      state.mkInicioTemp = mk; mk.openPopup();
+    }
+    async function capFin(){
+      const p = await getGPS();
+      state.actual.fin = p;
+      if (state.mkFinTemp) { try { map.removeLayer(state.mkFinTemp); } catch(_){} }
+      const mk = L.marker([p.lat,p.lng], { title:"Final (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar final");
+      mk.on("dragend", (e)=>{
+        const ll = e.target.getLatLng();
+        state.actual.fin = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
+      });
+      addLayer(mk);
+      state.mkFinTemp = mk; mk.openPopup();
+    }
 
-    
-async function capFin(){
-  const p = await getGPS();
-  state.actual.fin = p;
-  if (state.mkFinTemp) { try { map.removeLayer(state.mkFinTemp); } catch(_){} }
-  const mk = L.marker([p.lat,p.lng], { title:"Final (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar final");
-  mk.on("dragend", (e)=>{
-    const ll = e.target.getLatLng();
-    state.actual.fin = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
-  });
-  addLayer(mk);
-  state.mkFinTemp = mk;
-  mk.openPopup();
-}
-
-
-    // ====== Eventos de UI
+    // ====== Guardar tramo
     $("newTramo").onclick = ()=>{ openSheet(); setStep(1); };
     $("s1-cancel").onclick = closeSheet;
     $("s1-next").onclick = ()=>{
@@ -476,74 +447,69 @@ async function capFin(){
         inicio: state.actual.inicio,
         fin: state.actual.fin,
         fotoInicio: state.actual.fotoInicio,
-        fotoInicioUrl: null,
         fotoFin: state.actual.fotoFin,
-        fotoFinUrl: null,
         createdAt: new Date().toISOString()
       };
       state.items.push(it);
       localStorage.setItem("brechas_items", JSON.stringify(state.items));
       drawItem(it, true);
       closeSheet();
-      // limpiar marcadores temporales
       try{ if(state.mkInicioTemp){ map.removeLayer(state.mkInicioTemp); state.mkInicioTemp=null; } }catch(_){ }
       try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){ }
       renderAll();
-    updatePendingUI();
+      updatePendingUI();
     };
 
-    // Botones de captura en pasos
-    $("cap-inicio").onclick = async ()=>{
-      try{ await capInicio(); alert("Punto inicial capturado."); } catch{ alert("No se pudo obtener ubicación."); }
-    };
-    $("cap-fin").onclick = async ()=>{
-      try{ await capFin(); alert("Punto final capturado."); } catch{ alert("No se pudo obtener ubicación."); }
-    };
+    // ====== Sincronización con Pages Function (proxy → Apps Script)
+    function getPendingCount(){ try { return (state.items || []).filter(it => !it.synced).length; } catch { return 0; } }
+    function updatePendingUI(){
+      const n = getPendingCount();
+      const badge = document.getElementById("pendingBadge");
+      const banner = document.getElementById("pendingBanner");
+      const countEl = document.getElementById("pendingCount");
+      if(badge){ if(n>0){ badge.style.display='inline-block'; badge.textContent = n + ' pendiente(s)'; } else { badge.style.display='none'; } }
+      if(banner){ if(n>0){ banner.style.display='block'; if(countEl) countEl.textContent = n; } else { banner.style.display='none'; } }
+    }
 
-    // Mostrar previsualizaciones cuando el usuario selecciona archivos
-    $("fotoInicio").addEventListener("change", async (e)=>{
-      if(e.target.files[0]){
-        const url = await fileToDataURL(e.target.files[0]);
-        $("previewInicio").src = url; $("previewInicioWrap").classList.remove("hidden");
-      }
-    });
-    $("fotoFin").addEventListener("change", async (e)=>{
-      if(e.target.files[0]){
-        const url = await fileToDataURL(e.target.files[0]);
-        $("previewFin").src = url; $("previewFinWrap").classList.remove("hidden");
-      }
-    });
+    async function syncToSheet(pendientes){
+      const payload = { records: pendientes };
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      return await res.json();
+    }
 
-    
-async function syncToSheet(pendientes){
-  if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
-  const payload = { records: pendientes };
-  const res = await fetch(APPS_SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) });
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  return await res.json();
-}
-
-window.syncBrechas = async function(){
-  const pendientes = state.items.filter(it=>!it.synced);
-  if(!pendientes.length){ alert("Nada por sincronizar."); return; }
-  try{
-    const data = await syncToSheet(pendientes);
-    const okIds = new Set(data.syncedIds || []);
-    const urlMap = data.urlMap || {};
-    state.items = state.items.map(it => {
-      if(okIds.has(it.id)){
-        const urls = urlMap[it.id] || {};
-        return { ...it, synced:true, fotoInicioUrl: urls.inicio || it.fotoInicioUrl || null, fotoFinUrl: urls.fin || it.fotoFinUrl || null };
-      }
-      return it;
-    });
-    localStorage.setItem("brechas_items", JSON.stringify(state.items));
-    renderAll();
-    updatePendingUI();
-    alert("Sincronización completa.");
-  } catch(e){ console.error(e); alert("Error al sincronizar."); }
-}
-
+    const syncBtn = document.getElementById("syncBtn");
+    if(syncBtn){
+      syncBtn.addEventListener("click", async ()=>{
+        const n = getPendingCount();
+        if(n===0){ toast("No hay reportes pendientes."); return; }
+        syncBtn.disabled = true; const old = syncBtn.textContent; syncBtn.textContent = "⏳ Sincronizando...";
+        try{
+          const pendientes = state.items.filter(it=>!it.synced);
+          const data = await syncToSheet(pendientes);
+          const okIds = new Set(data.syncedIds || []);
+          const urlMap = data.urlMap || {};
+          state.items = state.items.map(it => {
+            if(okIds.has(it.id)){
+              const urls = urlMap[it.id] || {};
+              return { ...it, synced:true, fotoInicioUrl: urls.inicio || it.fotoInicioUrl || null, fotoFinUrl: urls.fin || it.fotoFinUrl || null };
+            }
+            return it;
+          });
+          localStorage.setItem("brechas_items", JSON.stringify(state.items));
+          renderAll(); updatePendingUI();
+          toast("✅ Sincronización completa");
+        } catch(e){
+          console.error(e); toast("❌ Error al sincronizar");
+        } finally {
+          syncBtn.disabled=false; syncBtn.textContent = old;
+        }
+      });
+    }
 
     // Abrir previews en grande al tocar
     document.addEventListener('click', function(e){
@@ -552,41 +518,6 @@ window.syncBrechas = async function(){
         try { window.open(el.src, '_blank'); } catch(_) {}
       }
     });
-
-    // === Pending sync UI helpers ===
-    function getPendingCount(){
-      try { return (state.items || []).filter(it => !it.synced).length; } catch { return 0; }
-    }
-    function updatePendingUI(){
-      const n = getPendingCount();
-      const badge = document.getElementById("pendingBadge");
-      const banner = document.getElementById("pendingBanner");
-      const countEl = document.getElementById("pendingCount");
-      if(badge){
-        if(n>0){ badge.style.display='inline-block'; badge.textContent = n + ' pendiente(s)'; }
-        else { badge.style.display='none'; }
-      }
-      if(banner){
-        if(n>0){ banner.style.display='block'; if(countEl) countEl.textContent = n; }
-        else { banner.style.display='none'; }
-      }
-    }
-    const syncBtn = document.getElementById("syncBtn");
-    if(syncBtn){
-      syncBtn.addEventListener("click", async ()=>{
-        const n = getPendingCount();
-        if(n===0){ alert("No hay reportes pendientes."); return; }
-        try{
-          await window.syncBrechas();
-        }catch(e){
-          alert("Error al sincronizar.");
-        } finally {
-          updatePendingUI();
-        }
-      });
-    }
-
   </script>
 </body>
 </html>
-
