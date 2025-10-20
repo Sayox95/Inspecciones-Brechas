@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <link rel="icon" href="data:,">
   <title>Captura de Brechas (Móvil)</title>
 
   <!-- Leaflet (sin integrity/crossorigin para evitar SRI mismatch) -->
@@ -272,13 +273,13 @@
       addLayer(line);
 
       const mkIni = L.circleMarker([it.inicio.lat,it.inicio.lng], { radius:7, color:col, fillColor:col, fillOpacity:.95 });
-      mkIni.bindPopup(()=> markerPopupHtml(it.inicio, `INICIO — \${it.circuito}`, it.fotoInicio,
-        `\${it.sector} • \${it.subestacion} • \${it.tipo}` ));
+      mkIni.bindPopup(()=> markerPopupHtml(it.inicio, `INICIO — ${it.circuito}`, it.fotoInicio,
+        `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
       addLayer(mkIni);
 
       const mkFin = L.circleMarker([it.fin.lat,it.fin.lng], { radius:7, color:col, fillColor:col, fillOpacity:.95 });
-      mkFin.bindPopup(()=> markerPopupHtml(it.fin, `FINAL — \${it.circuito}`, it.fotoFin,
-        `\${it.sector} • \${it.subestacion} • \${it.tipo}` ));
+      mkFin.bindPopup(()=> markerPopupHtml(it.fin, `FINAL — ${it.circuito}`, it.fotoFin,
+        `${it.sector} • ${it.subestacion} • ${it.tipo}` ));
       addLayer(mkFin);
 
       // Click en la línea abre resumen
@@ -286,13 +287,13 @@
         const mid = [(it.inicio.lat+it.fin.lat)/2, (it.inicio.lng+it.fin.lng)/2];
         const html = `
           <div style="min-width:240px">
-            <div class="popup-title">\${it.sector} • \${it.subestacion}</div>
-            <div class="popup-meta">Circuito: <b>\${it.circuito}</b> — <span style="color:\${col}">\${it.tipo}</span></div>
-            <div class="popup-meta">\${new Date(it.createdAt).toLocaleString()}</div>
-            <div class="popup-meta">Inicio: \${it.inicio.lat.toFixed(6)}, \${it.inicio.lng.toFixed(6)}</div>
-            <div class="popup-meta">Final: \${it.fin.lat.toFixed(6)}, \${it.fin.lng.toFixed(6)}</div>
-            \${it.fotoInicio?'<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="'+it.fotoInicio+'"/>':''}
-            \${it.fotoFin?'<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="'+it.fotoFin+'"/>':''}
+            <div class="popup-title">${it.sector} • ${it.subestacion}</div>
+            <div class="popup-meta">Circuito: <b>${it.circuito}</b> — <span style="color:${col}">${it.tipo}</span></div>
+            <div class="popup-meta">${new Date(it.createdAt).toLocaleString()}</div>
+            <div class="popup-meta">Inicio: ${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}</div>
+            <div class="popup-meta">Final: ${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}</div>
+            ${it.fotoInicio?'<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="'+it.fotoInicio+'"/>':''}
+            ${it.fotoFin?'<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="'+it.fotoFin+'"/>':''}
           </div>`;
         L.popup().setLatLng(mid).setContent(html).openOn(map);
       });
@@ -360,16 +361,16 @@
       const col = tipoColor(it.tipo);
       $("resumen").innerHTML = `
         <div class="grid">
-          <div><b>Sector:</b> \${it.sector}</div>
-          <div><b>Subestación:</b> \${it.subestacion}</div>
-          <div><b>Circuito:</b> \${it.circuito}</div>
-          <div><b>Tipo:</b> <span style="color:\${col}">\${it.tipo}</span></div>
-          <div><b>Inicio:</b> \${it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-'}</div>
-          <div><b>Final:</b> \${it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-'}</div>
+          <div><b>Sector:</b> ${it.sector}</div>
+          <div><b>Subestación:</b> ${it.subestacion}</div>
+          <div><b>Circuito:</b> ${it.circuito}</div>
+          <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
+          <div><b>Inicio:</b> ${it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-'}</div>
+          <div><b>Final:</b> ${it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-'}</div>
           <div><b>Foto inicio:</b></div>
-          \${it.fotoInicio ? '<img class="preview" src="'+it.fotoInicio+'"/>' : '<div class="note">Sin foto</div>'}
+          ${it.fotoInicio ? '<img class="preview" src="'+it.fotoInicio+'"/>' : '<div class="note">Sin foto</div>'}
           <div><b>Foto final:</b></div>
-          \${it.fotoFin ? '<img class="preview" src="'+it.fotoFin+'"/>' : '<div class="note">Sin foto</div>'}
+          ${it.fotoFin ? '<img class="preview" src="'+it.fotoFin+'"/>' : '<div class="note">Sin foto</div>'}
         </div>`;
     }
 
