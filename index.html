@@ -292,8 +292,8 @@
             <div class="popup-meta">${new Date(it.createdAt).toLocaleString()}</div>
             <div class="popup-meta">Inicio: ${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}</div>
             <div class="popup-meta">Final: ${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}</div>
-            ${it.fotoInicio?'<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="'+it.fotoInicio+'"/>':''}
-            ${it.fotoFin?'<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="'+it.fotoFin+'"/>':''}
+            ${ (it.fotoInicioUrl||it.fotoInicio) ? `<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="${it.fotoInicioUrl||it.fotoInicio}"/>` : ''}
+            ${ (it.fotoFinUrl||it.fotoFin) ? `<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="${it.fotoFinUrl||it.fotoFin}"/>` : ''}
           </div>`;
         L.popup().setLatLng(mid).setContent(html).openOn(map);
       });
@@ -356,22 +356,59 @@
       return true;
     }
 
+    
     function fillResumen(){
       const it = state.actual;
       const col = tipoColor(it.tipo);
-      $("resumen").innerHTML = `
-        <div class="grid">
-          <div><b>Sector:</b> ${it.sector}</div>
-          <div><b>Subestación:</b> ${it.subestacion}</div>
-          <div><b>Circuito:</b> ${it.circuito}</div>
-          <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
-          <div><b>Inicio:</b> ${it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-'}</div>
-          <div><b>Final:</b> ${it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-'}</div>
-          <div><b>Foto inicio:</b></div>
-          ${it.fotoInicio ? '<img class="preview" src="'+it.fotoInicio+'"/>' : '<div class="note">Sin foto</div>'}
-          <div><b>Foto final:</b></div>
-          ${it.fotoFin ? '<img class="preview" src="'+it.fotoFin+'"/>' : '<div class="note">Sin foto</div>'}
-        </div>`;
+      const wrap = document.createElement('div');
+      wrap.className = 'grid';
+
+      function addLine(label, valueHtml){
+        const d = document.createElement('div');
+        d.innerHTML = '<b>'+label+':</b> ' + valueHtml;
+        wrap.appendChild(d);
+      }
+
+      addLine('Sector', it.sector || '-');
+      addLine('Subestación', it.subestacion || '-');
+      addLine('Circuito', it.circuito || '-');
+      addLine('Tipo', '<span style="color:'+col+'">'+it.tipo+'</span>');
+      addLine('Inicio', it.inicio ? (it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6)) : '-');
+      addLine('Final', it.fin ? (it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6)) : '-');
+
+      // Foto inicio
+      wrap.appendChild(document.createElement('div')).innerHTML = '<b>Foto inicio:</b>';
+      if (it.fotoInicio) {
+        const img = document.createElement('img');
+        img.className = 'preview';
+        img.alt = 'Foto inicio';
+        img.src = it.fotoInicio;
+        wrap.appendChild(img);
+      } else {
+        const n = document.createElement('div');
+        n.className = 'note';
+        n.textContent = 'Sin foto';
+        wrap.appendChild(n);
+      }
+
+      // Foto final
+      wrap.appendChild(document.createElement('div')).innerHTML = '<b>Foto final:</b>';
+      if (it.fotoFin) {
+        const img = document.createElement('img');
+        img.className = 'preview';
+        img.alt = 'Foto final';
+        img.src = it.fotoFin;
+        wrap.appendChild(img);
+      } else {
+        const n = document.createElement('div');
+        n.className = 'note';
+        n.textContent = 'Sin foto';
+        wrap.appendChild(n);
+      }
+
+      const cont = document.getElementById('resumen');
+      cont.innerHTML = '';
+      cont.appendChild(wrap);
     }
 
     // ====== Capturas
