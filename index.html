@@ -8,7 +8,44 @@
 
   <!-- Leaflet (sin integrity/crossorigin para evitar SRI mismatch) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+
+// === IMAGE COMPRESSION FUNCTION ===
+async function compressImageFile(file, maxSide = 1600, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxSide) {
+        height = Math.round(height * maxSide / width);
+        width = maxSide;
+      } else if (height > maxSide) {
+        width = Math.round(width * maxSide / height);
+        height = maxSide;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(
+        (blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result); // base64 result
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+</script>
 
 
 
@@ -445,7 +482,7 @@ bootstrapData();
       }
       const f = $("fotoInicio").files[0];
       if(!state.actual.inicio || !f) return false;
-      state.actual.fotoInicio = await fileToDataURL(f);
+      state.actual.fotoInicio = await compressImageFile(f, 1600, 0.7);
       $("previewInicio").src = state.actual.fotoInicio; $("previewInicioWrap").classList.remove("hidden");
       return true;
     }
@@ -456,7 +493,7 @@ bootstrapData();
       }
       const f = $("fotoFin").files[0];
       if(!state.actual.fin || !f) return false;
-      state.actual.fotoFin = await fileToDataURL(f);
+      state.actual.fotoFin = await compressImageFile(f, 1600, 0.7);
       $("previewFin").src = state.actual.fotoFin; $("previewFinWrap").classList.remove("hidden");
       return true;
     }
@@ -611,13 +648,13 @@ $("s4-save").onclick = async ()=>{
     // Mostrar previsualizaciones cuando el usuario selecciona archivos
     $("fotoInicio").addEventListener("change", async (e)=>{
       if(e.target.files[0]){
-        const url = await fileToDataURL(e.target.files[0]);
+        const url = await compressImageFile(e.target.files[0], 1600, 0.7);
         $("previewInicio").src = url; $("previewInicioWrap").classList.remove("hidden");
       }
     });
     $("fotoFin").addEventListener("change", async (e)=>{
       if(e.target.files[0]){
-        const url = await fileToDataURL(e.target.files[0]);
+        const url = await compressImageFile(e.target.files[0], 1600, 0.7);
         $("previewFin").src = url; $("previewFinWrap").classList.remove("hidden");
       }
     });
