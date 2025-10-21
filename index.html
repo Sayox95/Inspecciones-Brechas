@@ -267,6 +267,20 @@ function removeLayer(l){
 }
 function hasValidPoint(p){return !!(p && typeof p.lat==='number' && !isNaN(p.lat) && typeof p.lng==='number' && !isNaN(p.lng));}
 
+
+function toEmbeddableImageUrl(u){
+  if (!u) return '';
+  try{
+    const url = String(u);
+    // Pattern 1: /file/d/<ID>/view
+    let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    // Pattern 2: ...open?id=<ID> or .../uc?export=download&id=<ID>
+    m = url.match(/[?&]id=([^&]+)/i);
+    if (m && m[1] && /drive\.google\.com/i.test(url)) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    return url;
+  }catch(_){ return u; }
+}
 function getPhotoSrc(it, which){
   const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
   const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
@@ -289,7 +303,7 @@ function getPhotoSrc(it, which){
   // 1) If we have a remote URL (or dataURL-like string), use it
   const u = it[urlKey];
   const uNorm = normalize(u);
-  if (uNorm) return uNorm;
+  if (uNorm) return toEmbeddableImageUrl(uNorm);
 
   // 2) If we have a Blob, create/reuse object URL
   const b = it[blobKey];
@@ -328,7 +342,7 @@ function photoForPopup(it, which){
   }
   // Finally, fall back to explicit URL field if it's a string
   const u = it[urlKey];
-  if (typeof u === 'string' && u.trim()) return u.trim();
+  if (typeof u === 'string' && u.trim()) return toEmbeddableImageUrl(u.trim());
   return '';
 }
 function markerPopupHtml(p,t,f,m){ const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas'; const img=f?`<img class="popup-img" loading="lazy" src="${f}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>'; return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`; }
