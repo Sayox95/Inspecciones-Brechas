@@ -180,15 +180,24 @@ function updatePendingUI(){const n=state.items.filter(x=>!x.synced).length; cons
 
 async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
 async function imageToBlob(file){
-  const bmp=await readImageBitmap(file);
-  const ratio=Math.min(1, IMG_MAX/Math.max(bmp.width,bmp.height));
-  const w=Math.round(bmp.width*ratio), h=Math.round(bmp.height*ratio);
+  const bmp = await readImageBitmap(file);
+  const ratio = Math.min(1, IMG_MAX/Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * ratio), h = Math.round(bmp.height * ratio);
   let canvas;
-  if (typeof OffscreenCanvas!=='undefined'){ canvas=new OffscreenCanvas(w,h); }
-  else { canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; }
-  const ctx=canvas.getContext('2d',{alpha:false}); ctx.drawImage(bmp,0,0,w,h);
-  async function toBlob(c,t,q){ if(c.convertToBlob) return await c.convertToBlob({type:t,quality:q}); return await new Promise(r=>c.toBlob(r,t,q)); }
-  try { return await toBlob(canvas,'image/webp',IMG_QUALITY); } catch(_){ return await toBlob(canvas,'image/jpeg',IMG_QUALITY); }
+  if (typeof OffscreenCanvas !== 'undefined'){
+    canvas = new OffscreenCanvas(w, h);
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+  }
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.drawImage(bmp, 0, 0, w, h);
+  async function toBlob(c, t, q){
+    if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
+    return await new Promise(r => c.toBlob(r, t, q));
+  }
+  // Always JPEG for server compatibility
+  return await toBlob(canvas, 'image/jpeg', IMG_QUALITY);
 }
 function blobUrl(b){return URL.createObjectURL(b)}
 async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
@@ -222,7 +231,7 @@ function fillResumen(){ const it=state.actual, col=tipoColor(it.tipo); const ini
 async function capInicio(){ const p=await getGPS(); state.actual.inicio=p; if(state.mkInicioTemp){try{map && map.removeLayer(state.mkInicioTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup(); }
 async function capFin(){ const p=await getGPS(); state.actual.fin=p; if(state.mkFinTemp){try{map && map.removeLayer(state.mkFinTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup(); }
 
-async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; const skipped=[]; for(const it of pendientes){ if(!hasValidPoint(it.inicio)||!hasValidPoint(it.fin)){ skipped.push(it.id); continue; } const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } rec.inicio = `${it.inicio.lat},${it.inicio.lng}`; rec.fin = `${it.fin.lat},${it.fin.lng}`; payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); const resp=await r.json(); resp.skippedIds=skipped; return resp; }
+async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; const skipped=[]; for(const it of pendientes){ if(!hasValidPoint(it.inicio)||!hasValidPoint(it.fin)){ skipped.push(it.id); continue; } const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } rec.inicio = { lat: it.inicio.lat, lng: it.inicio.lng }; rec.fin = { lat: it.fin.lat, lng: it.fin.lng }; payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); const resp=await r.json(); resp.skippedIds=skipped; return resp; }
 async function syncPending(){ const pendientes=state.items.filter(x=>!x.synced); if(!pendientes.length){toast('No hay reportes pendientes.'); return;} showBlocker('Sincronizando pendientes…'); try{ const data=await syncToServer(pendientes); const okIds=new Set([...(data.syncedIds||[]),...(data.alreadySyncedIds||[])]); const urlMap=data.urlMap||{}; state.items=state.items.map(x=> okIds.has(x.id) ? {...x, synced:true, fotoInicioUrl:(urlMap[x.id]||{}).inicio||x.fotoInicioUrl||'', fotoFinUrl:(urlMap[x.id]||{}).fin||x.fotoFinUrl||'' } : x); await idbReplaceAll(state.items); if(mapReady){ renderAllIncremental(); } updatePendingUI(); toast('✅ Sincronización completa'); if((data.skippedIds||[]).length){ toast('Algunos reportes se omitieron por coordenadas inválidas.'); } }catch(e){ console.warn(e); toast(e && e.name==='AbortError' ? '⏳ Tiempo agotado. Intenta de nuevo.' : '❌ Error al sincronizar'); } finally{ hideBlocker(); }}
 
 $('newTramo').onclick=()=>{openSheet(); setStep(1)}; $('s1-cancel').onclick=closeSheet; $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); }; $('s2-back').onclick=()=>setStep(1); $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); }; $('s3-back').onclick=()=>setStep(2); $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
