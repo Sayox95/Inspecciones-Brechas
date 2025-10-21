@@ -453,7 +453,31 @@ async function capFin(){
       try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){ }
       renderAll();
     updatePendingUI();
-    };
+    
+// === Auto-sync after save (idempotent, best-effort) ===
+try {
+  const pendientes = state.items.filter(x => !x.synced);
+  if (pendientes.length) {
+    const data = await syncToSheet(pendientes);
+    const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
+    const urlMap = data.urlMap || {};
+    state.items = state.items.map(x => {
+      if (okIds.has(x.id)) {
+        const urls = urlMap[x.id] || {};
+        return { ...x, synced:true, fotoInicioUrl: urls.inicio || x.fotoInicioUrl || null, fotoFinUrl: urls.fin || x.fotoFinUrl || null };
+      }
+      return x;
+    });
+    localStorage.setItem("brechas_items", JSON.stringify(state.items));
+    renderAll();
+    updatePendingUI();
+    alert("✅ Guardado y sincronizado");
+  }
+} catch (e) {
+  console.warn("Autosync falló, queda pendiente:", e);
+  // No alert intrusivo; el usuario verá el contador de pendientes
+}
+};
 
     // Botones de captura en pasos
     $("cap-inicio").onclick = async ()=>{
@@ -493,7 +517,7 @@ window.syncBrechas = async function(){
   if(!pendientes.length){ alert("Nada por sincronizar."); return; }
   try{
     const data = await syncToSheet(pendientes);
-    const okIds = new Set(data.syncedIds || []);
+    const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
     const urlMap = data.urlMap || {};
     state.items = state.items.map(it => {
       if(okIds.has(it.id)){
@@ -508,9 +532,7 @@ window.syncBrechas = async function(){
     alert("Sincronización completa.");
   } catch(e){ console.error(e); alert("Error al sincronizar."); }
 }
-
-
-    // Abrir previews en grande al tocar
+// Abrir previews en grande al tocar
     document.addEventListener('click', function(e){
       const el = e.target;
       if (el && el.classList && el.classList.contains('preview')) {
