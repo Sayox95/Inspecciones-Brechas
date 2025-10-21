@@ -554,6 +554,16 @@ $("s4-save").onclick = async ()=>{
 
   // Bloquear UI y autosincronizar
   showBlocker('Guardando y sincronizando…');
+  let ok = false;
+  if (!navigator.onLine) {
+    // Modo offline: guardamos solo local y marcamos como pendiente
+    it.synced = false;
+    try{ localStorage.setItem("brechas_items", JSON.stringify(state.items)); }catch{}
+    renderAll(); updatePendingUI();
+    hideBlocker();
+    toast("📴 Sin conexión. Guardado localmente y quedará pendiente de sincronizar.");
+    return;
+  }
   try {
     const pendientes = state.items.filter(x => !x.synced);
     if (pendientes.length) {
@@ -571,12 +581,13 @@ $("s4-save").onclick = async ()=>{
       renderAll();
       updatePendingUI();
     }
-    toast("Información guardada correctamente");
+    
+    ok = true;
   } catch (e) {
     console.warn("Autosync falló, queda pendiente:", e);
-    toast("La información no pudo ser guardada. Intente más tarde.");
   } finally {
     hideBlocker();
+    toast(ok ? "Información guardada correctamente" : "La información no pudo ser guardada. Intente más tarde.");
   }
 };
 
@@ -606,9 +617,16 @@ $("s4-save").onclick = async ()=>{
 async function syncToSheet(pendientes){
   if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
   const payload = { records: pendientes };
+  // Timeout de cliente para evitar bloqueos largos en modo offline/latencia
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 12000);
   const res = await fetch(APPS_SCRIPT_URL, {
-    method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(payload),
+    signal: controller.signal
   });
+  clearTimeout(t);
   if(!res.ok) throw new Error("HTTP "+res.status);
   return await res.json();
 }
