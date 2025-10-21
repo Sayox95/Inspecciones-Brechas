@@ -8,7 +8,28 @@
 
   <!-- Leaflet (sin integrity/crossorigin para evitar SRI mismatch) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+function toast(msg){
+  let t = document.getElementById('toast');
+  if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.display='block';
+  setTimeout(()=>{ t.style.display='none'; }, 2400);
+}
+
+function showBlocker(text){
+  const el = document.getElementById('blocker');
+  const tx = document.getElementById('blockerText');
+  if(tx) tx.textContent = text || 'Sincronizando…';
+  if(el) el.style.display = 'flex';
+}
+function hideBlocker(){
+  const el = document.getElementById('blocker');
+  if(el) el.style.display = 'none';
+}
+</script>
+
+
 
   <style>
     :root{
@@ -77,7 +98,28 @@
       padding:8px 12px;font-size:13px;display:none}
     .pending-banner strong{color:#ffd39a}
 
-  </style>
+  
+/* Fullscreen blocker to prevent interaction while guardando/sincronizando */
+.blocker{
+  position:fixed; inset:0; z-index:3000;
+  display:none; align-items:center; justify-content:center;
+  background:rgba(5,10,20,.55); backdrop-filter:blur(2px);
+}
+.blocker .box{
+  background:#0e1729; border:1px solid #203153; color:#eaf2ff;
+  padding:16px 18px; border-radius:14px; min-width:240px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35); text-align:center;
+  font-weight:600;
+}
+.spinner{
+  width:22px; height:22px; border-radius:50%;
+  border:3px solid #29436f; border-top-color:#4cc9f0;
+  animation:sp 0.9s linear infinite; display:inline-block; margin-right:10px;
+  vertical-align:middle;
+}
+@keyframes sp{to{transform:rotate(360deg);}}
+</style>
+
 </head>
 <body>
   <header>
@@ -429,57 +471,58 @@ async function capFin(){
       setStep(4);
     };
     $("s4-cancel").onclick = ()=>{ closeSheet(); };
-    $("s4-save").onclick = async ()=>{
-      const it = {
-        id: crypto.randomUUID(),
-        sector: state.actual.sector,
-        subestacion: state.actual.subestacion,
-        circuito: state.actual.circuito,
-        tipo: state.actual.tipo,
-        inicio: state.actual.inicio,
-        fin: state.actual.fin,
-        fotoInicio: state.actual.fotoInicio,
-        fotoInicioUrl: null,
-        fotoFin: state.actual.fotoFin,
-        fotoFinUrl: null,
-        createdAt: new Date().toISOString()
-      };
-      state.items.push(it);
-      localStorage.setItem("brechas_items", JSON.stringify(state.items));
-      drawItem(it, true);
-      closeSheet();
-      // limpiar marcadores temporales
-      try{ if(state.mkInicioTemp){ map.removeLayer(state.mkInicioTemp); state.mkInicioTemp=null; } }catch(_){ }
-      try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){ }
-      renderAll();
-    updatePendingUI();
     
-// === Auto-sync after save (idempotent, best-effort) ===
-try {
-  const pendientes = state.items.filter(x => !x.synced);
-  if (pendientes.length) {
-    const data = await syncToSheet(pendientes);
-    const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
-    const urlMap = data.urlMap || {};
-    state.items = state.items.map(x => {
-      if (okIds.has(x.id)) {
-        const urls = urlMap[x.id] || {};
-        return { ...x, synced:true, fotoInicioUrl: urls.inicio || x.fotoInicioUrl || null, fotoFinUrl: urls.fin || x.fotoFinUrl || null };
-      }
-      return x;
-    });
-    localStorage.setItem("brechas_items", JSON.stringify(state.items));
-    renderAll();
-    updatePendingUI();
-    alert("✅ Guardado y sincronizado");
+$("s4-save").onclick = async ()=>{
+  const it = {
+    id: crypto.randomUUID(),
+    sector: state.actual.sector,
+    subestacion: state.actual.subestacion,
+    circuito: state.actual.circuito,
+    tipo: state.actual.tipo,
+    inicio: state.actual.inicio,
+    fin: state.actual.fin,
+    fotoInicio: state.actual.fotoInicio,
+    fotoFin: state.actual.fotoFin,
+    createdAt: new Date().toISOString()
+  };
+  state.items.push(it);
+  localStorage.setItem("brechas_items", JSON.stringify(state.items));
+  drawItem(it, true);
+  closeSheet();
+  try{ if(state.mkInicioTemp){ map.removeLayer(state.mkInicioTemp); state.mkInicioTemp=null; } }catch(_){}
+  try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){}
+  renderAll();
+  updatePendingUI();
+
+  // Bloquear UI y autosincronizar
+  showBlocker('Guardando y sincronizando…');
+  try {
+    const pendientes = state.items.filter(x => !x.synced);
+    if (pendientes.length) {
+      const data = await syncToSheet(pendientes);
+      const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
+      const urlMap = data.urlMap || {};
+      state.items = state.items.map(x => {
+        if (okIds.has(x.id)) {
+          const urls = urlMap[x.id] || {};
+          return { ...x, synced:true, fotoInicioUrl: urls.inicio || x.fotoInicioUrl || null, fotoFinUrl: urls.fin || x.fotoFinUrl || null };
+        }
+        return x;
+      });
+      localStorage.setItem("brechas_items", JSON.stringify(state.items));
+      renderAll();
+      updatePendingUI();
+    }
+    toast("Información guardada correctamente");
+  } catch (e) {
+    console.warn("Autosync falló, queda pendiente:", e);
+    toast("La información no pudo ser guardada. Intente más tarde.");
+  } finally {
+    hideBlocker();
   }
-} catch (e) {
-  console.warn("Autosync falló, queda pendiente:", e);
-  // No alert intrusivo; el usuario verá el contador de pendientes
-}
 };
 
-    // Botones de captura en pasos
+// Botones de captura en pasos
     $("cap-inicio").onclick = async ()=>{
       try{ await capInicio(); alert("Punto inicial capturado."); } catch{ alert("No se pudo obtener ubicación."); }
     };
@@ -514,7 +557,7 @@ async function syncToSheet(pendientes){
 
 window.syncBrechas = async function(){
   const pendientes = state.items.filter(it=>!it.synced);
-  if(!pendientes.length){ alert("Nada por sincronizar."); return; }
+  if(!pendientes.length){ toast("No hay reportes pendientes."); return; }
   try{
     const data = await syncToSheet(pendientes);
     const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
@@ -529,8 +572,8 @@ window.syncBrechas = async function(){
     localStorage.setItem("brechas_items", JSON.stringify(state.items));
     renderAll();
     updatePendingUI();
-    alert("Sincronización completa.");
-  } catch(e){ console.error(e); alert("Error al sincronizar."); }
+    toast("✅ Sincronización completa");
+  } catch(e){ console.error(e); toast("❌ Error al sincronizar"); }
 }
 // Abrir previews en grande al tocar
     document.addEventListener('click', function(e){
@@ -566,14 +609,40 @@ window.syncBrechas = async function(){
         try{
           await window.syncBrechas();
         }catch(e){
-          alert("Error al sincronizar.");
+          toast("❌ Error al sincronizar");
         } finally {
           updatePendingUI();
         }
       });
     }
 
-  </script>
+  
+function toast(msg){
+  let t = document.getElementById('toast');
+  if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.display='block';
+  setTimeout(()=>{ t.style.display='none'; }, 2400);
+}
+
+function showBlocker(text){
+  const el = document.getElementById('blocker');
+  const tx = document.getElementById('blockerText');
+  if(tx) tx.textContent = text || 'Sincronizando…';
+  if(el) el.style.display = 'flex';
+}
+function hideBlocker(){
+  const el = document.getElementById('blocker');
+  if(el) el.style.display = 'none';
+}
+</script>
+
+
+
+<div id="blocker" class="blocker" aria-hidden="true">
+  <div class="box"><span class="spinner"></span><span id="blockerText">Guardando…</span></div>
+</div>
 </body>
+
 </html>
 
