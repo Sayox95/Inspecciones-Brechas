@@ -270,6 +270,7 @@ async function bootstrapData(){
   let pending = [];
   try { pending = JSON.parse(localStorage.getItem('brechas_items')||'[]').filter(x=>!x.synced); } catch {}
   try {
+    toast('Cargando tramos…');
     showBlocker('Cargando datos…');
     const serverItems = await fetchAllFromServer();
     state.items = [...serverItems, ...pending];
@@ -285,6 +286,7 @@ async function bootstrapData(){
     toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.');
   } finally {
     hideBlocker();
+    toast('Tramos cargados');
   }
 }
 
@@ -614,9 +616,10 @@ async function syncToSheet(pendientes){
 window.syncBrechas = async function(){
   const pendientes = state.items.filter(it=>!it.synced);
   if(!pendientes.length){ toast("No hay reportes pendientes."); return; }
+  showBlocker('Sincronizando pendientes…');
   try{
     const data = await syncToSheet(pendientes);
-    const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
+const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [])]);
     const urlMap = data.urlMap || {};
     state.items = state.items.map(it => {
       if(okIds.has(it.id)){
@@ -630,6 +633,7 @@ window.syncBrechas = async function(){
     updatePendingUI();
     toast("✅ Sincronización completa");
   } catch(e){ console.error(e); toast("❌ Error al sincronizar"); }
+  finally { hideBlocker(); }
 }
 // Abrir previews en grande al tocar
     document.addEventListener('click', function(e){
