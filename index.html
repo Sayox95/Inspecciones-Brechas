@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <meta name="theme-color" content="#0b1220"/>
   <link rel="icon" href="data:,">
-  <title>Captura de Brechas — Single HTML (2025-10 v2)</title>
+  <title>Captura de Brechas (Móvil) — Refactor 2025-10 v3</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root{
@@ -22,10 +25,7 @@
       border-bottom:1px solid var(--border);padding:12px 14px}
     header h1{margin:0;font-size:16px}
     header .muted{color:var(--muted);font-size:12px}
-    #map{position:absolute;inset:84px 0 0 0;background:#0c1425}
-    #net{position:fixed;left:0;right:0;top:52px;z-index:11;
-      background:#39250b;color:#ffddae;border-bottom:1px solid #5b3a11;
-      padding:6px 10px;font-size:12px;display:none}
+    #map{position:absolute;inset:52px 0 0 0}
     .fab{position:fixed;right:16px;bottom:16px;z-index:1100;
       border:0;border-radius:999px;background:var(--accent);color:#051423;
       padding:14px 16px;font-weight:800;box-shadow:var(--shadow);}
@@ -111,14 +111,13 @@
 <body>
   <header>
     <h1>Captura de Brechas</h1>
-    <span class="muted">Single HTML • Offline (IDB) • GPS • Fotos</span>
+    <span class="muted">Móvil • GPS • Fotos</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span id="pendingBadge" class="chip" style="display:none"></span>
       <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
     </div>
   </header>
 
-  <div id="net">Estás sin conexión. Puedes seguir capturando; sincronizaremos cuando vuelva el internet.</div>
   <div id="map"></div>
   <div id="pendingBanner" class="pending-banner">Tienes <strong id="pendingCount">0</strong> reporte(s) pendientes de sincronizar.</div>
 
@@ -216,254 +215,150 @@
   </section>
 
   <script>
-  "use strict";
+    "use strict";
 
-  // ===== CONFIG (usa tus proxys/endpoints) =====
-  const APPS_SCRIPT_URL = "/api/sync"; // Ajusta a tu proxy/endpoint actual
+    // ====== CONFIG ======
+    const APPS_SCRIPT_URL = "/api/sync"; // pega tu URL de Web App para sincronizar
 
-  // ===== Estado de red =====
-  const netBar = document.getElementById('net');
-  function updateNetUI(){
-    if (navigator.onLine) { netBar.style.display = 'none'; }
-    else { netBar.style.display = 'block'; }
-  }
-  window.addEventListener('online', function(){ updateNetUI(); attemptSync(); });
-  window.addEventListener('offline', updateNetUI);
-  updateNetUI();
+    // ====== MAPA ======
+    const map = L.map('map', { zoomControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20, attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
 
-  // ====== Carga dinámica Leaflet ======
-  let L_loaded = false;
-  function loadLeaflet() {
-    return new Promise(function(resolve){
-      if (window.L) { L_loaded = true; return resolve(true); }
-      var link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-      var s = document.createElement('script');
-      s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      s.async = true;
-      s.onload = function(){ L_loaded = true; resolve(true); };
-      s.onerror = function(){ resolve(false); };
-      document.head.appendChild(s);
-      setTimeout(function(){ if (!window.L) resolve(false); }, 5000);
-    });
-  }
-
-  // ====== Mapa ======
-  let map = null;
-  let mapLayers = [];
-  function initMapIfAvailable(){
-    if (!L_loaded || !window.L) return;
-    try {
-      map = L.map('map', { zoomControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 20, attribution: '&copy; OpenStreetMap'
-      }).addTo(map);
-      map.setView([14.0723,-87.1921], 7);
-    } catch (e) {
-      console.warn('No se pudo iniciar Leaflet:', e);
+    // Centrado inicial a ubicación del usuario (con UX de carga)
+    function locate() {
+      if (navigator.geolocation) {
+        showBlocker('Obteniendo ubicación…');
+        getGPSFast().then((p)=>{
+          hideBlocker();
+          map.setView([p.lat, p.lng], 17);
+        }).catch(()=>{
+          hideBlocker();
+          map.setView([14.0723,-87.1921], 7);
+          toast('No fue posible obtener tu ubicación inicial.');
+        });
+      } else {
+        map.setView([14.0723,-87.1921], 7);
+      }
     }
-  }
+    locate();
 
-  loadLeaflet().then(function(){ initMapIfAvailable(); locate(); renderAll(); });
+    // ====== Estado ======
+    const $ = (id)=> document.getElementById(id);
+    const sheet = $("sheet");
+    let step = 1;
+    const state = {
+      actual: {
+        sector:"", subestacion:"", circuito:"", tipo:"Apertura",
+        inicio:null, fin:null, fotoInicio:null, fotoFin:null
+      },
+      items: [], layers: [],
+      mkInicioTemp:null, mkFinTemp:null
+    };
 
-  function addLayer(layer){
-    mapLayers.push(layer);
-    if (map) { layer.addTo(map); }
-  }
-  function clearMapLayers(){
-    mapLayers.forEach(function(l){
-      try{ if(map) map.removeLayer(l); }catch(_){}
-    });
-    mapLayers = [];
-  }
+    // cargar items de localStorage
+    try{ state.items = JSON.parse(localStorage.getItem("brechas_items")||"[]"); }catch(e){ state.items = []; }
+    renderAll();
+    updatePendingUI();
 
-  // ====== Utiles DOM ======
-  const $ = function(id){ return document.getElementById(id); };
-  const sheet = $("sheet");
-  let step = 1;
+    // ====== Utiles ======
+    function openSheet(){ sheet.classList.add("open"); }
+    function closeSheet(){ sheet.classList.remove("open"); setStep(1); clearWizard(false); }
+    function show(id){ var el = $(id); if(el) el.classList.remove("hidden"); }
+    function hide(id){ var el = $(id); if(el) el.classList.add("hidden"); }
+    function setStep(n){
+      step = n;
+      ["step-1","step-2","step-3","step-4"].forEach(function(s){ hide(s); });
+      show("step-"+n);
+    }
+    function tipoColor(t){ return (t==="Limpieza") ? "#22c55e" : "#f97316"; }
+    function addLayer(layer){ state.layers.push(layer); layer.addTo(map); }
+    function clearMapLayers(){
+      state.layers.forEach(function(l){
+        try{ map.removeLayer(l); }catch(_){ /* ignore */ }
+      });
+      state.layers = [];
+    }
 
-  function openSheet(){ sheet.classList.add("open"); }
-  function closeSheet(){ sheet.classList.remove("open"); setStep(1); clearWizard(false); }
-  function show(id){ var el = $(id); if(el) el.classList.remove("hidden"); }
-  function hide(id){ var el = $(id); if(el) el.classList.add("hidden"); }
-  function setStep(n){
-    step = n;
-    ["step-1","step-2","step-3","step-4"].forEach(function(s){ hide(s); });
-    show("step-"+n);
-  }
-  function tipoColor(t){ return (t==="Limpieza") ? "#22c55e" : "#f97316"; }
+    // Imagen: compresión agresiva para móviles (evita desbordar localStorage)
+    async function compressImage(file, maxW=1280, maxH=1280, quality=0.72){
+      if(!file) return null;
+      const img = await new Promise((res,rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          const i = new Image();
+          i.onload = ()=> res(i);
+          i.onerror = rej;
+          i.src = reader.result;
+        };
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const width = img.width;
+      const height = img.height;
+      const ratio = Math.min(maxW / width, maxH / height, 1);
+      const w = Math.round(width * ratio);
+      const h = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d', { alpha:false });
+      ctx.drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', quality);
+    }
 
-  // ====== Geolocalización rápida ======
-  function getGPSFast(){
-    return new Promise(function(resolve,reject){
-      if(!navigator.geolocation) return reject(new Error("Geolocalización no disponible"));
-      let done = false;
-      const opts = { enableHighAccuracy:true, timeout:15000, maximumAge:30000 };
-      const id = navigator.geolocation.watchPosition(function(pos){
-        if(done) return;
-        done = true;
-        try{ navigator.geolocation.clearWatch(id); }catch(_){}
-        resolve({ lat:pos.coords.latitude, lng:pos.coords.longitude, ts:Date.now(), acc:pos.coords.accuracy });
-      }, function(err){
-        if(done) return;
-        done = true;
-        try{ navigator.geolocation.clearWatch(id); }catch(_){}
-        reject(err);
-      }, opts);
-      setTimeout(function(){
-        if(!done){
+    function fileToDataURL(file){ return new Promise((resolve,reject)=>{
+      if(!file) return resolve(null);
+      const r = new FileReader();
+      r.onload = ()=> resolve(r.result);
+      r.onerror = reject; r.readAsDataURL(file);
+    });}
+
+    // Geolocalización rápida: primer fix con watchPosition (mejor para móviles)
+    function getGPSFast(){
+      return new Promise((resolve,reject)=>{
+        if(!navigator.geolocation) return reject(new Error("Geolocalización no disponible"));
+        let done = false;
+        const opts = { enableHighAccuracy:true, timeout:15000, maximumAge:30000 };
+        const id = navigator.geolocation.watchPosition(function(pos){
+          if(done) return;
           done = true;
           try{ navigator.geolocation.clearWatch(id); }catch(_){}
-          reject(new Error('timeout'));
-        }
-      }, 16000);
-    });
-  }
-
-  function locate() {
-    if (!map) return;
-    if (navigator.geolocation) {
-      showBlocker('Obteniendo ubicación…');
-      getGPSFast().then(function(p){
-        hideBlocker();
-        map.setView([p.lat, p.lng], 17);
-      }).catch(function(){
-        hideBlocker();
+          resolve({ lat:pos.coords.latitude, lng:pos.coords.longitude, ts:Date.now(), acc:pos.coords.accuracy });
+        }, function(err){
+          if(done) return;
+          done = true;
+          try{ navigator.geolocation.clearWatch(id); }catch(_){}
+          reject(err);
+        }, opts);
+        setTimeout(function(){
+          if(!done){
+            done = true;
+            try{ navigator.geolocation.clearWatch(id); }catch(_){}
+            reject(new Error('timeout'));
+          }
+        }, 16000);
       });
     }
-  }
 
-  // ====== Imagen ======
-  function canvasToBlob(canvas, type, quality){
-    return new Promise(function(resolve){
-      canvas.toBlob(function(blob){ resolve(blob); }, type, quality);
-    });
-  }
-  async function compressToBlob(file, maxW, maxH, quality){
-    if(!file) return null;
-    const img = await new Promise(function(res,rej){
-      const reader = new FileReader();
-      reader.onload = function(){
-        const i = new Image();
-        i.onload = function(){ res(i); };
-        i.onerror = rej;
-        i.src = reader.result;
-      };
-      reader.onerror = rej;
-      reader.readAsDataURL(file);
-    });
-    const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
-    const w = Math.round(img.width * ratio);
-    const h = Math.round(img.height * ratio);
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d', { alpha:false });
-    ctx.drawImage(img, 0, 0, w, h);
-    return await canvasToBlob(canvas, 'image/jpeg', quality);
-  }
-  function blobToObjectURL(blob){ try{ return URL.createObjectURL(blob); }catch(_){ return null; } }
-  function blobToDataURL(blob){ return new Promise(function(res, rej){
-    const fr = new FileReader();
-    fr.onload = function(){ res(fr.result); };
-    fr.onerror = rej;
-    fr.readAsDataURL(blob);
-  }); }
+    function markerPopupHtml(p, titulo, fotoDataUrl, meta){
+      var imgHtml = fotoDataUrl
+        ? '<img class="popup-img" src="' + fotoDataUrl + '" alt="foto"/>'
+        : '<div class="popup-meta">Sin foto</div>';
+      return (
+        '<div style="min-width:220px">' +
+          '<div class="popup-title">' + titulo + '</div>' +
+          '<div class="popup-meta">Lat: ' + p.lat.toFixed(6) + ' &middot; Lng: ' + p.lng.toFixed(6) + (p.acc ? ' • ±' + Math.round(p.acc) + 'm' : '') + '</div>' +
+          '<div class="popup-meta">' + meta + '</div>' +
+          imgHtml +
+        '</div>'
+      );
+    }
 
-  // ====== IndexedDB ======
-  const DB_NAME = 'brechas-db';
-  const DB_VER = 1;
-  function openDB(){
-    return new Promise(function(resolve, reject){
-      const req = indexedDB.open(DB_NAME, DB_VER);
-      req.onupgradeneeded = function(e){
-        const db = e.target.result;
-        if(!db.objectStoreNames.contains('items')){
-          const s = db.createObjectStore('items', { keyPath: 'id' });
-          s.createIndex('synced', 'synced', { unique:false });
-        }
-        if(!db.objectStoreNames.contains('photos')){
-          db.createObjectStore('photos', { keyPath: 'key' });
-        }
-      };
-      req.onsuccess = function(){ resolve(req.result); };
-      req.onerror = function(){ reject(req.error); };
-    });
-  }
-  async function dbTx(store, mode, fn){
-    const db = await openDB();
-    return new Promise(function(resolve, reject){
-      const tx = db.transaction(store, mode);
-      const st = tx.objectStore(store);
-      const ret = fn(st);
-      tx.oncomplete = function(){ resolve(ret); };
-      tx.onerror = function(){ reject(tx.error); };
-    });
-  }
-  function putItem(item){ return dbTx('items', 'readwrite', function(st){ st.put(item); }); }
-  // FIX: getAllItems debe resolver con array real, no con IDBRequest
-  function getAllItems(){
-    return new Promise(async function(resolve, reject){
-      try {
-        const db = await openDB();
-        const tx = db.transaction('items','readonly');
-        const st = tx.objectStore('items');
-        const req = st.getAll();
-        req.onsuccess = function(){ resolve(req.result || []); };
-        req.onerror = function(){ reject(req.error); };
-      } catch (e) { reject(e); }
-    });
-  }
-  function updateItem(id, patch){
-    return dbTx('items','readwrite', function(st){
-      const req = st.get(id);
-      req.onsuccess = function(){
-        const it = req.result || { id:id };
-        Object.assign(it, patch);
-        st.put(it);
-      };
-    });
-  }
-  function putPhoto(key, blob){ return dbTx('photos','readwrite', function(st){ st.put({ key:key, blob:blob }); }); }
-  function getPhoto(key){
-    return new Promise(async function(resolve, reject){
-      const db = await openDB();
-      const tx = db.transaction('photos','readonly');
-      const st = tx.objectStore('photos');
-      const req = st.get(key);
-      req.onsuccess = function(){ resolve(req.result ? req.result.blob : null); };
-      req.onerror = function(){ reject(req.error); };
-    });
-  }
+    function drawItem(it, fit){
+      var col = tipoColor(it.tipo);
 
-  // ====== App State ======
-  const state = {
-    actual: {
-      sector:"", subestacion:"", circuito:"", tipo:"Apertura",
-      inicio:null, fin:null, fotoInicioKey:null, fotoFinKey:null
-    },
-    items: [],
-    tempMkIni:null, tempMkFin:null
-  };
-
-  function markerPopupHtml(p, titulo, fotoUrl, meta){
-    var imgHtml = fotoUrl
-      ? '<img class="popup-img" src="' + fotoUrl + '" alt="foto"/>'
-      : '<div class="popup-meta">Sin foto</div>';
-    return (
-      '<div style="min-width:220px">'
-      + '<div class="popup-title">' + titulo + '</div>'
-      + '<div class="popup-meta">Lat: ' + p.lat.toFixed(6) + ' · Lng: ' + p.lng.toFixed(6) + (p.acc ? ' • ±' + Math.round(p.acc) + 'm' : '') + '</div>'
-      + '<div class="popup-meta">' + meta + '</div>'
-      + imgHtml
-      + '</div>'
-    );
-  }
-
-  async function drawItem(it, fit){
-    const col = (it && it.tipo === "Limpieza") ? "#22c55e" : "#f97316";
-    if (map && window.L && it && it.inicio && it.fin) {
+      // Línea
       var line = L.polyline(
         [
           [it.inicio.lat, it.inicio.lng],
@@ -473,29 +368,23 @@
       );
       addLayer(line);
 
-      let urlIni = null, urlFin = null;
-      try{
-        if (it.fotoInicioKey){ const b1 = await getPhoto(it.fotoInicioKey); if(b1) urlIni = blobToObjectURL(b1); }
-        if (it.fotoFinKey){ const b2 = await getPhoto(it.fotoFinKey); if(b2) urlFin = blobToObjectURL(b2); }
-      }catch(_){}
-
+      // Marcador inicio
       var mkIni = L.circleMarker([it.inicio.lat, it.inicio.lng], { radius:7, color:col, fillColor:col, fillOpacity:0.95 });
       mkIni.bindPopup(function(){
-        return markerPopupHtml(it.inicio, 'INICIO — ' + it.circuito, urlIni, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
+        return markerPopupHtml(it.inicio, 'INICIO — ' + it.circuito, it.fotoInicio, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
       });
       addLayer(mkIni);
 
+      // Marcador final
       var mkFin = L.circleMarker([it.fin.lat, it.fin.lng], { radius:7, color:col, fillColor:col, fillOpacity:0.95 });
       mkFin.bindPopup(function(){
-        return markerPopupHtml(it.fin, 'FINAL — ' + it.circuito, urlFin, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
+        return markerPopupHtml(it.fin, 'FINAL — ' + it.circuito, it.fotoFin, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
       });
       addLayer(mkFin);
 
-      line.on("click", async function(){
+      // Click en la línea abre resumen
+      line.on("click", function(){
         var mid = [(it.inicio.lat + it.fin.lat)/2, (it.inicio.lng + it.fin.lng)/2];
-        let urlIni2 = urlIni, urlFin2 = urlFin;
-        if (!urlIni2 && it.fotoInicioKey){ const b = await getPhoto(it.fotoInicioKey); if(b) urlIni2 = blobToObjectURL(b); }
-        if (!urlFin2 && it.fotoFinKey){ const b = await getPhoto(it.fotoFinKey); if(b) urlFin2 = blobToObjectURL(b); }
         var html = ''
           + '<div style="min-width:240px">'
           +   '<div class="popup-title">' + it.sector + ' • ' + it.subestacion + '</div>'
@@ -503,333 +392,522 @@
           +   '<div class="popup-meta">' + new Date(it.createdAt).toLocaleString() + '</div>'
           +   '<div class="popup-meta">Inicio: ' + it.inicio.lat.toFixed(6) + ', ' + it.inicio.lng.toFixed(6) + '</div>'
           +   '<div class="popup-meta">Final: ' + it.fin.lat.toFixed(6) + ', ' + it.fin.lng.toFixed(6) + '</div>'
-          +   (urlIni2 ? '<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="' + urlIni2 + '"/>' : '')
-          +   (urlFin2 ? '<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="' + urlFin2 + '"/>' : '')
+          +   (it.fotoInicio ? '<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="' + it.fotoInicio + '"/>' : '')
+          +   (it.fotoFin ? '<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="' + it.fotoFin + '"/>' : '')
           + '</div>';
         L.popup().setLatLng(mid).setContent(html).openOn(map);
       });
 
-      if (fit){
+      if(fit){
         var b = L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]);
         map.fitBounds(b.pad(0.3));
       }
     }
-  }
 
-  async function renderAll(){
-    clearMapLayers();
-    let items = [];
-    try { items = await getAllItems(); } catch(e){ items = []; }
-    if (!Array.isArray(items)) items = [];
-    state.items = items;
-    // Guard contra sort si no es función
-    if (Array.isArray(state.items)) {
-      state.items.sort(function(a,b){ return String(a.createdAt||'').localeCompare(String(b.createdAt||'')); });
-      for (let i=0;i<state.items.length;i++){ await drawItem(state.items[i], false); }
+    function renderAll(){
+      clearMapLayers();
+      (state.items||[]).forEach(function(it){ drawItem(it, false); });
     }
-    updatePendingUI();
-  }
 
-  function clearWizard(resetAll){
-    if (typeof resetAll === "undefined") resetAll = true;
-    if(resetAll){
-      state.actual = { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioKey:null, fotoFinKey:null };
-    } else {
-      state.actual.inicio = null; state.actual.fin = null; state.actual.fotoInicioKey = null; state.actual.fotoFinKey = null;
+    function clearWizard(resetAll){
+      if (typeof resetAll === "undefined") resetAll = true;
+      if(resetAll){
+        state.actual = { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicio:null, fotoFin:null };
+      } else {
+        state.actual.inicio = null; state.actual.fin = null; state.actual.fotoInicio = null; state.actual.fotoFin = null;
+      }
+      $("sector").value = ""; $("subestacion").value=""; $("circuito").value="";
+      $("tipo").value = "Apertura";
+      $("fotoInicio").value = ""; $("fotoFin").value = "";
+      $("previewInicioWrap").classList.add("hidden");
+      $("previewFinWrap").classList.add("hidden");
+      $("previewInicio").src = ""; $("previewFin").src = "";
     }
-    $("sector").value = ""; $("subestacion").value=""; $("circuito").value="";
-    $("tipo").value = "Apertura";
-    $("fotoInicio").value = ""; $("fotoFin").value = "";
-    $("previewInicioWrap").classList.add("hidden");
-    $("previewFinWrap").classList.add("hidden");
-    $("previewInicio").src = ""; $("previewFin").src = "";
-  }
 
-  function validateStep1(){
-    var sector = $("sector").value.trim();
-    var sub = $("subestacion").value.trim();
-    var circ = $("circuito").value.trim();
-    if(!sector || !sub || !circ) return false;
-    state.actual.sector = sector; state.actual.subestacion = sub; state.actual.circuito = circ;
-    state.actual.tipo = $("tipo").value;
-    return true;
-  }
+    function validateStep1(){
+      var sector = $("sector").value.trim();
+      var sub = $("subestacion").value.trim();
+      var circ = $("circuito").value.trim();
+      if(!sector || !sub || !circ) return false;
+      state.actual.sector = sector; state.actual.subestacion = sub; state.actual.circuito = circ;
+      state.actual.tipo = $("tipo").value;
+      return true;
+    }
 
-  async function capInicio(){
-    showBlocker('Obteniendo GPS (inicio)…');
-    try{
-      const p = await getGPSFast();
-      state.actual.inicio = p;
-      if (state.tempMkIni && map) { try { map.removeLayer(state.tempMkIni); } catch(_){ } }
-      if (map && window.L) {
+    async function validateStep2(){
+      if(!state.actual.inicio){
+        try { await capInicio(); } catch (e) {}
+      }
+      var f = $("fotoInicio").files[0];
+      if(!state.actual.inicio || !f) return false;
+      state.actual.fotoInicio = await compressImage(f, 1280, 1280, 0.72);
+      $("previewInicio").src = state.actual.fotoInicio; $("previewInicioWrap").classList.remove("hidden");
+      return true;
+    }
+
+    async function validateStep3(){
+      if(!state.actual.fin){
+        try { await capFin(); } catch (e) {}
+      }
+      var f = $("fotoFin").files[0];
+      if(!state.actual.fin || !f) return false;
+      state.actual.fotoFin = await compressImage(f, 1280, 1280, 0.72);
+      $("previewFin").src = state.actual.fotoFin; $("previewFinWrap").classList.remove("hidden");
+      return true;
+    }
+
+    function fillResumen(){
+      var it = state.actual;
+      var col = tipoColor(it.tipo);
+      $("resumen").innerHTML =
+        '<div class="grid">'
+        + '<div><b>Sector:</b> ' + it.sector + '</div>'
+        + '<div><b>Subestación:</b> ' + it.subestacion + '</div>'
+        + '<div><b>Circuito:</b> ' + it.circuito + '</div>'
+        + '<div><b>Tipo:</b> <span style="color:' + col + '">' + it.tipo + '</span></div>'
+        + '<div><b>Inicio:</b> ' + (it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-') + '</div>'
+        + '<div><b>Final:</b> ' + (it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-') + '</div>'
+        + '<div><b>Foto inicio:</b></div>'
+        + (it.fotoInicio ? '<img class="preview" src="' + it.fotoInicio + '"/>' : '<div class="note">Sin foto</div>')
+        + '<div><b>Foto final:</b></div>'
+        + (it.fotoFin ? '<img class="preview" src="' + it.fotoFin + '"/>' : '<div class="note">Sin foto</div>')
+        + '</div>';
+    }
+
+    // ====== Capturas (con mejor UX y rapidez) ======
+    async function capInicio(){
+      showBlocker('Obteniendo GPS (inicio)…');
+      try{
+        const p = await getGPSFast();
+        state.actual.inicio = p;
+        if (state.mkInicioTemp) { try { map.removeLayer(state.mkInicioTemp); } catch(_){ /* ignore */ } }
         const mk = L.marker([p.lat,p.lng], { title:"Inicio (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar inicio");
         mk.on("dragend", function(e){
           const ll = e.target.getLatLng();
           state.actual.inicio = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
         });
         addLayer(mk);
-        state.tempMkIni = mk;
+        state.mkInicioTemp = mk;
         mk.openPopup();
-      }
-      toast('Punto inicial capturado.');
-    } finally { hideBlocker(); }
-  }
+        toast('Punto inicial capturado.');
+      } finally { hideBlocker(); }
+    }
 
-  async function capFin(){
-    showBlocker('Obteniendo GPS (final)…');
-    try{
-      const p = await getGPSFast();
-      state.actual.fin = p;
-      if (state.tempMkFin && map) { try { map.removeLayer(state.tempMkFin); } catch(_){ } }
-      if (map && window.L) {
+    async function capFin(){
+      showBlocker('Obteniendo GPS (final)…');
+      try{
+        const p = await getGPSFast();
+        state.actual.fin = p;
+        if (state.mkFinTemp) { try { map.removeLayer(state.mkFinTemp); } catch(_){ /* ignore */ } }
         const mk = L.marker([p.lat,p.lng], { title:"Final (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar final");
         mk.on("dragend", function(e){
           const ll = e.target.getLatLng();
           state.actual.fin = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
         });
         addLayer(mk);
-        state.tempMkFin = mk;
+        state.mkFinTemp = mk;
         mk.openPopup();
+        toast('Punto final capturado.');
+      } finally { hideBlocker(); }
+    }
+
+    // ====== Guardado & Sync robusto ======
+    function safeSetLocal(key, value){
+      try{
+        localStorage.setItem(key, value);
+        return true;
+      }catch(e){
+        console.warn('No se pudo guardar en localStorage:', e);
+        toast('⚠️ Memoria local llena. Considera sincronizar pronto.');
+        return false;
       }
-      toast('Punto final capturado.');
-    } finally { hideBlocker(); }
-  }
-
-  async function validateStep2(){
-    if(!state.actual.inicio){
-      try { await capInicio(); } catch (e) {}
     }
-    var f = $("fotoInicio").files[0];
-    if(!state.actual.inicio || !f) return false;
-    const blob = await compressToBlob(f, 1280, 1280, 0.72);
-    const key = 'f-' + (Date.now()) + '-' + Math.random().toString(16).slice(2) + '-ini';
-    await putPhoto(key, blob);
-    state.actual.fotoInicioKey = key;
-    const thumb = await compressToBlob(f, 960, 960, 0.7);
-    $("previewInicio").src = blobToObjectURL(thumb);
-    $("previewInicioWrap").classList.remove("hidden");
-    return true;
-  }
 
-  async function validateStep3(){
-    if(!state.actual.fin){
-      try { await capFin(); } catch (e) {}
+    async function fetchJSON(url, payload, opts){
+      const options = opts || {};
+      const timeoutMs = options.timeoutMs || 15000;
+      const retries = options.retries != null ? options.retries : 1;
+      const ctrl = new AbortController();
+      const t = setTimeout(function(){ try{ ctrl.abort(); }catch(_){ } }, timeoutMs);
+      try{
+        const res = await fetch(url, { ...payload, signal: ctrl.signal });
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+      }catch(e){
+        if(retries>0) return fetchJSON(url, payload, {timeoutMs:timeoutMs, retries:retries-1});
+        throw e;
+      }finally{ clearTimeout(t); }
     }
-    var f = $("fotoFin").files[0];
-    if(!state.actual.fin || !f) return false;
-    const blob = await compressToBlob(f, 1280, 1280, 0.72);
-    const key = 'f-' + (Date.now()) + '-' + Math.random().toString(16).slice(2) + '-fin';
-    await putPhoto(key, blob);
-    state.actual.fotoFinKey = key;
-    const thumb = await compressToBlob(f, 960, 960, 0.7);
-    $("previewFin").src = blobToObjectURL(thumb);
-    $("previewFinWrap").classList.remove("hidden");
-    return true;
-  }
 
-  function fillResumen(){
-    var it = state.actual;
-    var col = (it.tipo === "Limpieza") ? "#22c55e" : "#f97316";
-    $("resumen").innerHTML =
-      '<div class="grid">'
-      + '<div><b>Sector:</b> ' + it.sector + '</div>'
-      + '<div><b>Subestación:</b> ' + it.subestacion + '</div>'
-      + '<div><b>Circuito:</b> ' + it.circuito + '</div>'
-      + '<div><b>Tipo:</b> <span style="color:' + col + '">' + it.tipo + '</span></div>'
-      + '<div><b>Inicio:</b> ' + (it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-') + '</div>'
-      + '<div><b>Final:</b> ' + (it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-') + '</div>'
-      + '<div><b>Foto inicio:</b> clave ' + (it.fotoInicioKey || '-') + '</div>'
-      + '<div><b>Foto final:</b> clave ' + (it.fotoFinKey || '-') + '</div>'
-      + '</div>';
-  }
+    async function syncToSheet(pendientes){
+      if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
+      const payload = { records: pendientes };
+      return await fetchJSON(APPS_SCRIPT_URL, {
+        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
+      }, { timeoutMs: 20000, retries: 1 });
+    }
 
-  async function fetchJSON(url, payload, opts){
-    const options = opts || {};
-    const timeoutMs = options.timeoutMs || 15000;
-    const retries = options.retries != null ? options.retries : 1;
-    const ctrl = new AbortController();
-    const t = setTimeout(function(){ try{ ctrl.abort(); }catch(_){ } }, timeoutMs);
-    try{
-      const res = await fetch(url, Object.assign({}, payload, { signal: ctrl.signal }));
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.json();
-    }catch(e){
-      if(retries>0) return fetchJSON(url, payload, {timeoutMs:timeoutMs, retries:retries-1});
-      throw e;
-    }finally{ clearTimeout(t); }
-  }
+    // ====== Eventos de UI ======
+    $("newTramo").onclick = function(){ openSheet(); setStep(1); };
+    $("s1-cancel").onclick = closeSheet;
+    $("s1-next").onclick = function(){
+      if(!validateStep1()){ toast("Completa Sector, Subestación y Circuito."); return; }
+      setStep(2);
+    };
+    $("s2-back").onclick = function(){ setStep(1); };
+    $("s2-next").onclick = async function(){
+      const ok = await validateStep2();
+      if(!ok){ toast("Captura el punto inicial y selecciona una foto."); return; }
+      setStep(3);
+    };
+    $("s3-back").onclick = function(){ setStep(2); };
+    $("s3-next").onclick = async function(){
+      const ok = await validateStep3();
+      if(!ok){ toast("Captura el punto final y selecciona una foto."); return; }
+      fillResumen();
+      setStep(4);
+    };
+    $("s4-cancel").onclick = function(){ closeSheet(); };
 
-  async function syncItems(items){
-    if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
-    const payloadRecords = [];
-    for (let i=0;i<items.length;i++){
-      const x = items[i];
-      let fotoInicio64 = null, fotoFin64 = null;
-      try{ if (x.fotoInicioKey){ const b = await getPhoto(x.fotoInicioKey); if(b) fotoInicio64 = await blobToDataURL(b); } }catch(_){}
-      try{ if (x.fotoFinKey){ const b = await getPhoto(x.fotoFinKey); if(b) fotoFin64 = await blobToDataURL(b); } }catch(_){}
-      payloadRecords.push({
-        id: x.id, sector: x.sector, subestacion: x.subestacion, circuito: x.circuito,
-        tipo: x.tipo, inicio: x.inicio, fin: x.fin, createdAt: x.createdAt,
-        fotoInicio: fotoInicio64, fotoFin: fotoFin64
+    $("s4-save").onclick = async function(){
+      const btn = $("s4-save"); btn.disabled = true;
+
+      const it = {
+        id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2),
+        sector: state.actual.sector,
+        subestacion: state.actual.subestacion,
+        circuito: state.actual.circuito,
+        tipo: state.actual.tipo,
+        inicio: state.actual.inicio,
+        fin: state.actual.fin,
+        fotoInicio: state.actual.fotoInicio,
+        fotoFin: state.actual.fotoFin,
+        createdAt: new Date().toISOString(),
+        synced: false
+      };
+      state.items.push(it);
+      safeSetLocal("brechas_items", JSON.stringify(state.items));
+      drawItem(it, true);
+      closeSheet();
+      try{ if(state.mkInicioTemp){ map.removeLayer(state.mkInicioTemp); state.mkInicioTemp=null; } }catch(_){}
+      try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){}
+      renderAll();
+      updatePendingUI();
+
+      showBlocker('Guardando y sincronizando…');
+      let ok = false;
+      try {
+        const pendientes = state.items.filter(function(x){ return !x.synced; });
+        if (pendientes.length) {
+          const data = await syncToSheet(pendientes);
+          const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
+          const urlMap = data.urlMap || {};
+          state.items = state.items.map(function(x){
+            if (okIds.has(x.id)) {
+              const urls = urlMap[x.id] || {};
+              return Object.assign({}, x, { synced:true, fotoInicioUrl: urls.inicio || x.fotoInicioUrl || null, fotoFinUrl: urls.fin || x.fotoFinUrl || null });
+            }
+            return x;
+          });
+          safeSetLocal("brechas_items", JSON.stringify(state.items));
+          renderAll();
+          updatePendingUI();
+        }
+        ok = true;
+      } catch (e) {
+        console.warn("Autosync falló, queda pendiente:", e);
+      } finally {
+        hideBlocker();
+        toast(ok ? "Información guardada correctamente" : "Guardado local OK, sincronización pendiente.");
+        btn.disabled = false;
+      }
+    };
+
+    // Botones de captura
+    $("cap-inicio").onclick = capInicio;
+    $("cap-fin").onclick = capFin;
+
+    // Previews (ya comprimidos en validate*)
+    $("fotoInicio").addEventListener("change", async function(e){
+      if(e.target.files[0]){
+        const url = await compressImage(e.target.files[0], 960, 960, 0.7);
+        $("previewInicio").src = url; $("previewInicioWrap").classList.remove("hidden");
+      }
+    });
+    $("fotoFin").addEventListener("change", async function(e){
+      if(e.target.files[0]){
+        const url = await compressImage(e.target.files[0], 960, 960, 0.7);
+        $("previewFin").src = url; $("previewFinWrap").classList.remove("hidden");
+      }
+    });
+
+    window.syncBrechas = async function(){
+      const pendientes = (state.items||[]).filter(function(it){ return !it.synced; });
+      if(!pendientes.length){ toast("No hay reportes pendientes."); return; }
+      showBlocker('Sincronizando…');
+      try{
+        const data = await syncToSheet(pendientes);
+        const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
+        const urlMap = data.urlMap || {};
+        state.items = state.items.map(function(it){
+          if(okIds.has(it.id)){
+            const urls = urlMap[it.id] || {};
+            return Object.assign({}, it, { synced:true, fotoInicioUrl: urls.inicio || it.fotoInicioUrl || null, fotoFinUrl: urls.fin || it.fotoFinUrl || null });
+          }
+          return it;
+        });
+        safeSetLocal("brechas_items", JSON.stringify(state.items));
+        renderAll();
+        updatePendingUI();
+        toast("✅ Sincronización completa");
+      } catch(e){ console.error(e); toast("❌ Error al sincronizar"); }
+      finally{ hideBlocker(); }
+    };
+
+    // Abrir previews en grande al tocar
+    document.addEventListener('click', function(e){
+      const el = e.target;
+      if (el && el.classList && el.classList.contains('preview')) {
+        try { window.open(el.src, '_blank'); } catch(_) {}
+      }
+    });
+
+    // === Pending sync UI helpers ===
+    function getPendingCount(){
+      try { return (state.items || []).filter(function(it){ return !it.synced; }).length; } catch (e) { return 0; }
+    }
+    function updatePendingUI(){
+      const n = getPendingCount();
+      const badge = document.getElementById("pendingBadge");
+      const banner = document.getElementById("pendingBanner");
+      const countEl = document.getElementById("pendingCount");
+      if(badge){
+        if(n>0){ badge.style.display='inline-block'; badge.textContent = n + ' pendiente(s)'; }
+        else { badge.style.display='none'; }
+      }
+      if(banner){
+        if(n>0){ banner.style.display='block'; if(countEl) countEl.textContent = n; }
+        else { banner.style.display='none'; }
+      }
+    }
+    const syncBtn = document.getElementById("syncBtn");
+    if(syncBtn){
+      syncBtn.addEventListener("click", async function(){
+        const n = getPendingCount();
+        if(n===0){ toast("No hay reportes pendientes."); return; }
+        await window.syncBrechas();
       });
     }
-    return await fetchJSON(APPS_SCRIPT_URL, {
-      method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({records: payloadRecords})
-    }, { timeoutMs: 20000, retries: 1 });
-  }
 
-  async function attemptSync(){
-    try{
-      const items = await getAllItems();
-      const pend = (Array.isArray(items) ? items : []).filter(function(it){ return !it.synced; });
-      if (!pend.length) return;
-      const data = await syncItems(pend);
-      const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
-      for (let i=0;i<pend.length;i++){
-        const it = pend[i];
-        if (okIds.has(it.id)) await updateItem(it.id, { synced:true });
-      }
-      await renderAll();
-      toast('✅ Sincronización completa');
-    } catch (e) {
-      console.warn('Sync falló:', e);
+    // ====== UI helpers ======
+    function toast(msg){
+      let t = document.getElementById('toast');
+      if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+      t.textContent = msg;
+      t.style.display='block';
+      setTimeout(function(){ t.style.display='none'; }, 3000);
     }
-  }
-
-  function getPendingCountLocal(){ try{ return (state.items || []).filter(function(it){ return !it.synced; }).length; }catch(_){ return 0; } }
-  function updatePendingUI(){
-    const n = getPendingCountLocal();
-    const badge = document.getElementById("pendingBadge");
-    const banner = document.getElementById("pendingBanner");
-    const countEl = document.getElementById("pendingCount");
-    if(badge){
-      if(n>0){ badge.style.display='inline-block'; badge.textContent = n + ' pendiente(s)'; }
-      else { badge.style.display='none'; }
+    function showBlocker(text){
+      const el = document.getElementById('blocker');
+      const tx = document.getElementById('blockerText');
+      if(tx) tx.textContent = text || 'Sincronizando…';
+      if(el) el.style.display = 'flex';
     }
-    if(banner){
-      if(n>0){ banner.style.display='block'; if(countEl) countEl.textContent = n; }
-      else { banner.style.display='none'; }
+    function hideBlocker(){
+      const el = document.getElementById('blocker');
+      if(el) el.style.display = 'none';
     }
-  }
-
-  // ====== Eventos UI ======
-  $("newTramo").onclick = function(){ openSheet(); setStep(1); };
-  $("s1-cancel").onclick = closeSheet;
-  $("s1-next").onclick = function(){
-    if(!validateStep1()){ toast("Completa Sector, Subestación y Circuito."); return; }
-    setStep(2);
-  };
-  $("s2-back").onclick = function(){ setStep(1); };
-  $("s2-next").onclick = async function(){
-    const ok = await validateStep2();
-    if(!ok){ toast("Captura el punto inicial y selecciona una foto."); return; }
-    setStep(3);
-  };
-  $("s3-back").onclick = function(){ setStep(2); };
-  $("s3-next").onclick = async function(){
-    const ok = await validateStep3();
-    if(!ok){ toast("Captura el punto final y selecciona una foto."); return; }
-    fillResumen();
-    setStep(4);
-  };
-  $("s4-cancel").onclick = function(){ closeSheet(); };
-
-  $("s4-save").onclick = async function(){
-    const btn = $("s4-save"); btn.disabled = true;
-    const it = {
-      id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2),
-      sector: state.actual.sector,
-      subestacion: state.actual.subestacion,
-      circuito: state.actual.circuito,
-      tipo: state.actual.tipo,
-      inicio: state.actual.inicio,
-      fin: state.actual.fin,
-      fotoInicioKey: state.actual.fotoInicioKey,
-      fotoFinKey: state.actual.fotoFinKey,
-      createdAt: new Date().toISOString(),
-      synced: false
-    };
-    await putItem(it);
-    closeSheet();
-
-    try{ if(state.tempMkIni && map){ map.removeLayer(state.tempMkIni); state.tempMkIni=null; } }catch(_){}
-    try{ if(state.tempMkFin && map){ map.removeLayer(state.tempMkFin); state.tempMkFin=null; } }catch(_){}
-
-    await renderAll();
-    updatePendingUI();
-
-    showBlocker('Guardando' + (navigator.onLine ? ' y sincronizando…' : '…'));
-    let ok = false;
-    try {
-      if (navigator.onLine) { await attemptSync(); ok = true; }
-    } catch (e) { /* pendiente */ }
-    hideBlocker();
-    toast(ok ? "Información guardada correctamente" : "Guardado local OK, sincronización pendiente.");
-    btn.disabled = false;
-  };
-
-  $("cap-inicio").onclick = capInicio;
-  $("cap-fin").onclick = capFin;
-
-  $("fotoInicio").addEventListener("change", async function(e){
-    if(e.target.files[0]){
-      const thumb = await compressToBlob(e.target.files[0], 960, 960, 0.7);
-      $("previewInicio").src = blobToObjectURL(thumb); $("previewInicioWrap").classList.remove("hidden");
-    }
-  });
-  $("fotoFin").addEventListener("change", async function(e){
-    if(e.target.files[0]){
-      const thumb = await compressToBlob(e.target.files[0], 960, 960, 0.7);
-      $("previewFin").src = blobToObjectURL(thumb); $("previewFinWrap").classList.remove("hidden");
-    }
-  });
-
-  document.addEventListener('click', function(e){
-    const el = e.target;
-    if (el && el.classList && el.classList.contains('preview')) {
-      try { window.open(el.src, '_blank'); } catch(_) {}
-    }
-  });
-
-  const syncBtn = document.getElementById("syncBtn");
-  if(syncBtn){
-    syncBtn.addEventListener("click", async function(){
-      const n = getPendingCountLocal();
-      if(n===0){ toast("No hay reportes pendientes."); return; }
-      showBlocker('Sincronizando…');
-      try{ await attemptSync(); } finally { hideBlocker(); }
-    });
-  }
-
-  // ====== UI helpers ======
-  function toast(msg){
-    let t = document.getElementById('toast');
-    if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
-    t.textContent = msg;
-    t.style.display = 'block';
-    setTimeout(function(){ t.style.display='none'; }, 3000);
-  }
-  function showBlocker(text){
-    const el = document.getElementById('blocker');
-    const tx = document.getElementById('blockerText');
-    if(tx) tx.textContent = text || 'Procesando…';
-    if(el) el.style.display = 'flex';
-  }
-  function hideBlocker(){
-    const el = document.getElementById('blocker');
-    if(el) el.style.display = 'none';
-  }
-
-  // IMPORTANTE: sin archivos extra no podemos registrar ServiceWorker vía blob: en producción.
-  // Por eso, en esta versión v2 NO registramos SW. 
-  // Offline persiste datos/fotos en IndexedDB y puedes seguir trabajando con la pestaña abierta.
-  // Si en el futuro aceptas un archivo sw.js en el root, reactivamos PWA completa sin tocar el resto.
-
-  (async function(){ await renderAll(); })();
   </script>
 
   <div id="blocker" class="blocker" aria-hidden="true">
     <div class="box"><span class="spinner"></span><span id="blockerText">Guardando…</span></div>
   </div>
+
+<!-- Injected online-first sync layer 2025-10-21T20:23:46.268002Z -->
+<script>
+(() => {
+  // ===== CONFIG =====
+  const API_URL = (window.BRECHAS_API_URL || '/api/sync'); // your proxy to Apps Script
+  const LS_KEY = 'brechas_pend';
+  const MAX_PEND = 8;
+
+  // ===== HELPERS =====
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const $ = (id) => document.getElementById(id);
+  const toast = window.toast || ((msg) => console.log('[toast]', msg));
+
+  function lsGet(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+    catch { return fallback; }
+  }
+  function lsSet(key, val) {
+    const s = JSON.stringify(val);
+    localStorage.setItem(key, s); // may throw on quota
+  }
+  function actualizarBadgePendientes(n) {
+    const el = document.querySelector('[data-pendientes-badge]');
+    if (!el) return;
+    el.textContent = String(n);
+    el.style.display = n ? 'inline-flex' : 'none';
+  }
+  function genId() {
+    return (crypto.randomUUID?.() || 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+  }
+
+  async function comprimirFoto(fileOrBlob, maxDim=960, quality=0.5) {
+    const url = URL.createObjectURL(fileOrBlob);
+    const img = await new Promise((res, rej) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+    URL.revokeObjectURL(url);
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const r = Math.max(W,H) > maxDim ? (W>H ? maxDim/W : maxDim/H) : 1;
+    const w = Math.round(W*r), h = Math.round(H*r);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: false });
+    ctx.drawImage(img, 0, 0, w, h);
+    let dataURL = canvas.toDataURL('image/jpeg', quality);
+    const size = ((dataURL.split(',')[1]||'').length * 3) >> 2;
+    if (size > 200*1024) dataURL = canvas.toDataURL('image/jpeg', 0.4);
+    return dataURL;
+  }
+
+  async function postAPI(records, { timeoutMs=12000, retries=1 }={}) {
+    const body = JSON.stringify({ records });
+    let intento = 0, lastErr;
+    while (intento <= retries) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        const resp = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal: ctrl.signal
+        });
+        clearTimeout(t);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        if (!json?.ok) throw new Error(json?.error || 'Respuesta no OK');
+        return json;
+      } catch (e) {
+        lastErr = e;
+        if (navigator.onLine === false) break;
+        if (intento === retries) break;
+        await sleep(600 * (intento+1));
+        intento++;
+      }
+    }
+    throw lastErr || new Error('fallo de red');
+  }
+
+  function addPendienteLocal(item) {
+    let arr = lsGet(LS_KEY, []);
+    arr.push(item);
+    try { lsSet(LS_KEY, arr); }
+    catch (e) {
+      // try drop oldest
+      arr.shift();
+      lsSet(LS_KEY, arr);
+      toast('Se removió el pendiente más antiguo para liberar espacio.');
+    }
+    actualizarBadgePendientes(arr.length);
+  }
+
+  async function intentarSincronizarPendientes() {
+    if (!navigator.onLine) return;
+    let arr = lsGet(LS_KEY, []);
+    if (!arr.length) return;
+    document.documentElement.setAttribute('data-syncing','1');
+    const restantes = [];
+    for (const it of arr) {
+      try {
+        const resp = await postAPI([{ 
+          id: it.id,
+          sector: it.sector,
+          subestacion: it.subestacion,
+          circuito: it.circuito,
+          tipo: it.tipo,
+          inicio: it.inicio,
+          fin: it.fin,
+          fotoInicio: it.fotoInicio || undefined,
+          fotoFin: it.fotoFin || undefined,
+          createdAt: it.createdAt
+        }]);
+        const urls = resp?.urlMap?.[it.id] || {};
+        // hook UI if present
+        if (window.marcarEnUIComoSynced) window.marcarEnUIComoSynced(it.id, urls);
+      } catch (e) {
+        restantes.push(it);
+      }
+    }
+    lsSet(LS_KEY, restantes);
+    actualizarBadgePendientes(restantes.length);
+    document.documentElement.removeAttribute('data-syncing');
+    toast(restantes.length ? `Quedan ${restantes.length} pendientes` : 'Todo sincronizado ✅');
+  }
+
+  window.addEventListener('online', intentarSincronizarPendientes);
+
+  // ===== Public API (attach to window to avoid cross-function issues) =====
+  window.BrechasSync = {
+    async guardarOnlineFirst(tramo, archivos) {
+      // archivos: { inicio: File|Blob|null, fin: File|Blob|null }
+      // 1) Comprimir (estándar)
+      let fotoInicio = null, fotoFin = null;
+      if (archivos?.inicio) fotoInicio = await comprimirFoto(archivos.inicio, 960, 0.5);
+      if (archivos?.fin)    fotoFin   = await comprimirFoto(archivos.fin,    960, 0.5);
+      const id = (tramo.id || genId());
+      const createdAt = tramo.createdAt || new Date().toISOString();
+      const record = { id,
+        sector: tramo.sector, subestacion: tramo.subestacion, circuito: tramo.circuito, tipo: tramo.tipo,
+        inicio: tramo.inicio, fin: tramo.fin,
+        fotoInicio: fotoInicio || undefined, fotoFin: fotoFin || undefined,
+        createdAt
+      };
+      // 2) Intentar subir primero
+      try {
+        const resp = await postAPI([record], { timeoutMs: 12000, retries: 1 });
+        const urls = resp?.urlMap?.[id] || {
+          inicio: record.fotoInicioUrl || '', fin: record.fotoFinUrl || ''
+        };
+        // Marca UI como sincronizado si tienes función
+        if (window.marcarEnUIComoSynced) window.marcarEnUIComoSynced(id, urls);
+        toast('Subido ✅');
+        return { ok:true, online:true, id, urls };
+      } catch (e) {
+        // 3) Fallback local
+        const itemLocal = Object.assign({ synced:false }, record);
+        try {
+          // Control de cuota: máx MAX_PEND
+          let arr = lsGet(LS_KEY, []);
+          if (arr.length >= MAX_PEND) {
+            // intentar guardar removiendo el más antiguo
+            arr.shift();
+            lsSet(LS_KEY, arr);
+          }
+          addPendienteLocal(itemLocal);
+          toast('Guardado local ⚠️. Subiremos cuando vuelva internet.');
+          return { ok:true, online:false, id };
+        } catch (err) {
+          alert('No hay espacio para guardar sin conexión. Elimina pendientes o reduce fotos.');
+          return { ok:false, error: 'localStorage full' };
+        }
+      }
+    },
+    syncPendientes: intentarSincronizarPendientes,
+    pendientesCount() { return lsGet(LS_KEY, []).length; }
+  };
+
+  // ===== Try to wire Save button if known IDs exist =====
+  document.addEventListener('DOMContentLoaded', () => {
+    actualizarBadgePendientes(lsGet(LS_KEY, []).length);
+    const btnSync = document.querySelector('[data-action="sync-pendientes"]');
+    if (btnSync) btnSync.addEventListener('click', () => window.BrechasSync.syncPendientes());
+  });
+})();
+</script>
+
 </body>
 </html>
