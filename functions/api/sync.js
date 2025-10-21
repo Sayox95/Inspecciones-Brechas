@@ -19,7 +19,7 @@ export async function onRequestPost({ request, env }) {
   // 1) Lee la URL del Apps Script desde una variable de entorno
   const upstream =
     env?.APPS_SCRIPT_POST_URL ||
-    'https://script.google.com/macros/s/AKfycbxsLR83iSgWHY9uzKUTsjS1PSJ7zhf_dd2LkQ88ALS84hhCWJomPcO8TO2CuJeVINa7AQ/exec'; // <-- puedes hardcodear aquí si prefieres
+    'https://script.google.com/macros/s/AKfycbxe_5KJOTWWcSNLrBfo3cz5iOjnFlOa_lZ4OXxjdPt7gZRSaCsHdSBaWmyMGyBHjoM-zQ/exec'; // <-- puedes hardcodear aquí si prefieres
 
   try {
     // (Opcional) Timeout manual
