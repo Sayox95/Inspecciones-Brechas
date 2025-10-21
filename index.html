@@ -99,6 +99,25 @@
   vertical-align:middle;
 }
 @keyframes sp{to{transform:rotate(360deg);}}
+
+/* Toast message styling */
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:16px;
+  transform:translateX(-50%);
+  background:#0e1729;
+  color:#eaf2ff;
+  border:1px solid #203153;
+  padding:10px 14px;
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+  z-index:4000; /* above blocker (3000) */
+  display:none;
+  font-weight:600;
+  max-width:90vw;
+  text-align:center;
+}
 </style>
 
 </head>
@@ -477,6 +496,7 @@ $("s4-save").onclick = async ()=>{
 
   // Bloquear UI y autosincronizar
   showBlocker('Guardando y sincronizando…');
+  let ok = false;
   try {
     const pendientes = state.items.filter(x => !x.synced);
     if (pendientes.length) {
@@ -494,12 +514,12 @@ $("s4-save").onclick = async ()=>{
       renderAll();
       updatePendingUI();
     }
-    toast("Información guardada correctamente");
+    ok = true;
   } catch (e) {
     console.warn("Autosync falló, queda pendiente:", e);
-    toast("La información no pudo ser guardada. Intente más tarde.");
   } finally {
     hideBlocker();
+    toast(ok ? "Información guardada correctamente" : "La información no pudo ser guardada. Intente más tarde.");
   }
 };
 
