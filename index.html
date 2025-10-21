@@ -265,10 +265,12 @@ async function fetchAllFromServer(){
 }
 
 // Merge: server items + local pending (unsynced)
+// Merge: server items + local pending (unsynced)
 async function bootstrapData(){
   // Load pending local first
   let pending = [];
-  try { pending = JSON.parse(localStorage.getItem('brechas_items')||'[]').filter(x=>!x.synced); } catch {}
+  try { pending = JSON.parse(localStorage.getItem('brechas_items')||'[]').filter(x=>!x.synced); } catch (e) {}
+  let ok = false;
   try {
     toast('Cargando tramos…');
     showBlocker('Cargando datos…');
@@ -277,18 +279,21 @@ async function bootstrapData(){
     localStorage.setItem('brechas_items', JSON.stringify(state.items));
     renderAll();
     updatePendingUI();
+    ok = true; // éxito real
   } catch(e){
     console.warn('No se pudieron cargar datos del servidor:', e);
-    // Keep only local pending if server fails
+    // Modo offline: mostrar solo pendientes locales
     state.items = pending;
     renderAll();
     updatePendingUI();
     toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.');
   } finally {
     hideBlocker();
-    toast('Tramos cargados');
+    if (ok) toast('Tramos cargados');
   }
 }
+
+
 
 
     // ====== MAPA ======
@@ -436,7 +441,7 @@ bootstrapData();
     async function validateStep2(){
       if(!state.actual.inicio){
         // intentar capturar si no lo ha hecho
-        try { await capInicio(); } catch {}
+        try { await capInicio(); } catch (e) {}
       }
       const f = $("fotoInicio").files[0];
       if(!state.actual.inicio || !f) return false;
@@ -447,7 +452,7 @@ bootstrapData();
 
     async function validateStep3(){
       if(!state.actual.fin){
-        try { await capFin(); } catch {}
+        try { await capFin(); } catch (e) {}
       }
       const f = $("fotoFin").files[0];
       if(!state.actual.fin || !f) return false;
@@ -558,7 +563,7 @@ $("s4-save").onclick = async ()=>{
   if (!navigator.onLine) {
     // Modo offline: guardamos solo local y marcamos como pendiente
     it.synced = false;
-    try{ localStorage.setItem("brechas_items", JSON.stringify(state.items)); }catch{}
+    try{ localStorage.setItem("brechas_items", JSON.stringify(state.items)); } catch (e) {}
     renderAll(); updatePendingUI();
     hideBlocker();
     toast("📴 Sin conexión. Guardado localmente y quedará pendiente de sincronizar.");
@@ -593,10 +598,10 @@ $("s4-save").onclick = async ()=>{
 
 // Botones de captura en pasos
     $("cap-inicio").onclick = async ()=>{
-      try{ await capInicio(); alert("Punto inicial capturado."); } catch{ alert("No se pudo obtener ubicación."); }
+      try{ await capInicio(); alert("Punto inicial capturado."); } catch (e) { alert("No se pudo obtener ubicación."); }
     };
     $("cap-fin").onclick = async ()=>{
-      try{ await capFin(); alert("Punto final capturado."); } catch{ alert("No se pudo obtener ubicación."); }
+      try{ await capFin(); alert("Punto final capturado."); } catch (e) { alert("No se pudo obtener ubicación."); }
     };
 
     // Mostrar previsualizaciones cuando el usuario selecciona archivos
@@ -663,7 +668,7 @@ const okIds = new Set([...(data.syncedIds || []), ...(data.alreadySyncedIds || [
 
     // === Pending sync UI helpers ===
     function getPendingCount(){
-      try { return (state.items || []).filter(it => !it.synced).length; } catch { return 0; }
+      try { return (state.items || []).filter(it => !it.synced).length; } catch (e) { return 0; }
     }
     function updatePendingUI(){
       const n = getPendingCount();
