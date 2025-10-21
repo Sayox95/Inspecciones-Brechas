@@ -175,11 +175,20 @@ function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('block
 function hideBlocker(){$('blocker').style.display='none'}
 function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 
+
 function clearTempMarkers(){
   try {
-    if (state.mkInicioTemp){ removeLayer(state.mkInicioTemp); state.mkInicioTemp = null; }
-    if (state.mkFinTemp){ removeLayer(state.mkFinTemp); state.mkFinTemp = null; }
-  } catch (e) { console.warn('No se pudo limpiar marcadores temporales', e); }
+    if (state.mkInicioTemp){
+      try { removeLayer(state.mkInicioTemp); } catch(_) { try{ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); }catch(_){ } }
+      state.mkInicioTemp = null;
+    }
+    if (state.mkFinTemp){
+      try { removeLayer(state.mkFinTemp); } catch(_) { try{ state.mkFinTemp.remove && state.mkFinTemp.remove(); }catch(_){ } }
+      state.mkFinTemp = null;
+    }
+  } catch (e) {
+    console.warn('No se pudo limpiar marcadores temporales', e);
+  }
 }
 function updatePendingUI(){
   const b = document.getElementById('pendingBadge');
@@ -241,6 +250,21 @@ bootstrap();
 
 function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
 function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
+
+function removeLayer(l){
+  try{
+    if (!l) return;
+    if (l.remove) { l.remove(); return; }              // Leaflet layers have .remove()
+    if (typeof map !== 'undefined' && map && map.removeLayer) { map.removeLayer(l); }
+  }catch(e){ console.warn('removeLayer fallo', e); }
+  // además, quita de state.layers si está
+  try{
+    if (state && Array.isArray(state.layers)){
+      const i = state.layers.indexOf(l);
+      if (i >= 0) state.layers.splice(i,1);
+    }
+  }catch(_){}
+}
 function hasValidPoint(p){return !!(p && typeof p.lat==='number' && !isNaN(p.lat) && typeof p.lng==='number' && !isNaN(p.lng));}
 
 function getPhotoSrc(it, which){
