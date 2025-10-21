@@ -590,6 +590,10 @@ $("s4-save").onclick = async ()=>{
     ok = true;
   } catch (e) {
     console.warn("Autosync falló, queda pendiente:", e);
+    if (e && e.name === "AbortError") {
+      // Timeout de cliente: mantener pendiente y avisar específicamente
+      toast("⏳ Tiempo de espera agotado. Guardado localmente; se sincronizará luego.");
+    }
   } finally {
     hideBlocker();
     toast(ok ? "Información guardada correctamente" : "La información no pudo ser guardada. Intente más tarde.");
@@ -624,7 +628,7 @@ async function syncToSheet(pendientes){
   const payload = { records: pendientes };
   // Timeout de cliente para evitar bloqueos largos en modo offline/latencia
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 12000);
+  const t = setTimeout(() => controller.abort(), 45000);
   const res = await fetch(APPS_SCRIPT_URL, {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
