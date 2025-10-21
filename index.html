@@ -231,6 +231,64 @@
     // ====== CONFIG ======
     const APPS_SCRIPT_URL = "/api/sync"; // opcional: pega tu URL de Web App para sincronizar
 
+// ====== SERVER LOADING (GET all) ======
+async function fetchAllFromServer(){
+  if(!APPS_SCRIPT_URL) return [];
+  const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'mode=all';
+  const res = await fetch(url, { method:'GET' });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const data = await res.json();
+  const rows = Array.isArray(data.records) ? data.records : [];
+  // Map rows to local shape
+  return rows.map(r => {
+    const pIni = (r.inicio && typeof r.inicio === 'string') ? r.inicio.split(',').map(Number) : [NaN,NaN];
+    const pFin = (r.fin && typeof r.fin === 'string') ? r.fin.split(',').map(Number) : [NaN,NaN];
+    const ini = (Array.isArray(pIni) && pIni.length===2 && !isNaN(pIni[0])) ? {lat: pIni[0], lng: pIni[1]} : null;
+    const fin = (Array.isArray(pFin) && pFin.length===2 && !isNaN(pFin[0])) ? {lat: pFin[0], lng: pFin[1]} : null;
+    return {
+      id: r.id,
+      sector: r.sector || '',
+      subestacion: r.subestacion || '',
+      circuito: r.circuito || '',
+      tipo: r.tipo || 'Apertura',
+      inicio: ini,
+      fin: fin,
+      // We reuse URL also in foto* for rendering in popups
+      fotoInicioUrl: r.fotoInicioUrl || '',
+      fotoFinUrl: r.fotoFinUrl || '',
+      fotoInicio: r.fotoInicioUrl || '',
+      fotoFin: r.fotoFinUrl || '',
+      createdAt: r.createdAt || new Date().toISOString(),
+      synced: true
+    };
+  });
+}
+
+// Merge: server items + local pending (unsynced)
+async function bootstrapData(){
+  // Load pending local first
+  let pending = [];
+  try { pending = JSON.parse(localStorage.getItem('brechas_items')||'[]').filter(x=>!x.synced); } catch {}
+  try {
+    showBlocker('Cargando datos…');
+    const serverItems = await fetchAllFromServer();
+    state.items = [...serverItems, ...pending];
+    localStorage.setItem('brechas_items', JSON.stringify(state.items));
+    renderAll();
+    updatePendingUI();
+  } catch(e){
+    console.warn('No se pudieron cargar datos del servidor:', e);
+    // Keep only local pending if server fails
+    state.items = pending;
+    renderAll();
+    updatePendingUI();
+    toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.');
+  } finally {
+    hideBlocker();
+  }
+}
+
+
     // ====== MAPA ======
     const map = L.map('map', { zoomControl: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -259,10 +317,8 @@
       items: [], layers: []
     , mkInicioTemp:null, mkFinTemp:null };
 
-    // cargar items de localStorage
-    try{ state.items = JSON.parse(localStorage.getItem("brechas_items")||"[]"); }catch{}
-    renderAll();
-      updatePendingUI();
+    // cargar datos desde servidor + fusionar pendientes locales
+bootstrapData();
     updatePendingUI();
 
     // ====== Utiles ======
@@ -496,7 +552,6 @@ $("s4-save").onclick = async ()=>{
 
   // Bloquear UI y autosincronizar
   showBlocker('Guardando y sincronizando…');
-  let ok = false;
   try {
     const pendientes = state.items.filter(x => !x.synced);
     if (pendientes.length) {
@@ -514,12 +569,12 @@ $("s4-save").onclick = async ()=>{
       renderAll();
       updatePendingUI();
     }
-    ok = true;
+    toast("Información guardada correctamente");
   } catch (e) {
     console.warn("Autosync falló, queda pendiente:", e);
+    toast("La información no pudo ser guardada. Intente más tarde.");
   } finally {
     hideBlocker();
-    toast(ok ? "Información guardada correctamente" : "La información no pudo ser guardada. Intente más tarde.");
   }
 };
 
