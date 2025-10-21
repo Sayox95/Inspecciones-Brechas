@@ -310,9 +310,30 @@ function getPhotoSrc(it, which){
 
   return '';
 }
+
+function photoForPopup(it, which){
+  const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
+  const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
+  const v = it[blobKey];
+  // Prefer exact previous behavior: direct string (Data URL) if present
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  // If it's a Blob, create/reuse object URL
+  if (v instanceof Blob){
+    try{
+      state._objUrls = state._objUrls || new Map();
+      const key = (it.id||'tmp') + ':' + blobKey;
+      if (!state._objUrls.has(key)) state._objUrls.set(key, URL.createObjectURL(v));
+      return state._objUrls.get(key);
+    }catch(e){ console.warn('photoForPopup: ObjectURL error', e); }
+  }
+  // Finally, fall back to explicit URL field if it's a string
+  const u = it[urlKey];
+  if (typeof u === 'string' && u.trim()) return u.trim();
+  return '';
+}
 function markerPopupHtml(p,t,f,m){ const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas'; const img=f?`<img class="popup-img" loading="lazy" src="${f}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>'; return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`; }
-function drawItem(it,fit=false){ if(!hasValidPoint(it.inicio) || !hasValidPoint(it.fin)) return; const col=tipoColor(it.tipo); const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const fIni = getPhotoSrc(it,'inicio') || (typeof it.fotoInicio==='string' ? it.fotoInicio : '') || (typeof it.fotoInicioUrl==='string' ? it.fotoInicioUrl : '');
-const fFin = getPhotoSrc(it,'fin') || (typeof it.fotoFin==='string' ? it.fotoFin : '') || (typeof it.fotoFinUrl==='string' ? it.fotoFinUrl : ''); mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkIni); addLayer(mkFin); if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));} }
+function drawItem(it,fit=false){ if(!hasValidPoint(it.inicio) || !hasValidPoint(it.fin)) return; const col=tipoColor(it.tipo); const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const fIni = photoForPopup(it,'inicio');
+const fFin = photoForPopup(it,'fin'); mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkIni); addLayer(mkFin); if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));} }
 function renderAllIncremental(){ if(!map) return; clearMapLayers(); const items=[...state.items]; let i=0; function chunk(){ const start=performance.now(); while(i<items.length && (performance.now()-start)<8){ drawItem(items[i++], false);} if(i<items.length) requestIdleCallback(chunk,{timeout:60}); } requestIdleCallback(chunk,{timeout:60}); }
 
 function clearWizard(resetAll=true){ if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicio=null;state.actual.fotoFin=null} $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura'; $('fotoInicio').value='';$('fotoFin').value='';$('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');$('previewInicio').src='';$('previewFin').src='';}
