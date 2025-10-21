@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <meta name="theme-color" content="#0b1220"/>
   <link rel="icon" href="data:,">
-  <title>Captura de Brechas — Single HTML (2025-10)</title>
+  <title>Captura de Brechas — Single HTML (2025-10 v2)</title>
 
   <style>
     :root{
@@ -111,7 +111,7 @@
 <body>
   <header>
     <h1>Captura de Brechas</h1>
-    <span class="muted">Single HTML • Offline • GPS • Fotos</span>
+    <span class="muted">Single HTML • Offline (IDB) • GPS • Fotos</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <span id="pendingBadge" class="chip" style="display:none"></span>
       <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
@@ -231,7 +231,7 @@
   window.addEventListener('offline', updateNetUI);
   updateNetUI();
 
-  // ====== Carga dinámica Leaflet (SW la cacheará) ======
+  // ====== Carga dinámica Leaflet ======
   let L_loaded = false;
   function loadLeaflet() {
     return new Promise(function(resolve){
@@ -402,7 +402,19 @@
     });
   }
   function putItem(item){ return dbTx('items', 'readwrite', function(st){ st.put(item); }); }
-  function getAllItems(){ return dbTx('items','readonly', function(st){ return st.getAll(); }); }
+  // FIX: getAllItems debe resolver con array real, no con IDBRequest
+  function getAllItems(){
+    return new Promise(async function(resolve, reject){
+      try {
+        const db = await openDB();
+        const tx = db.transaction('items','readonly');
+        const st = tx.objectStore('items');
+        const req = st.getAll();
+        req.onsuccess = function(){ resolve(req.result || []); };
+        req.onerror = function(){ reject(req.error); };
+      } catch (e) { reject(e); }
+    });
+  }
   function updateItem(id, patch){
     return dbTx('items','readwrite', function(st){
       const req = st.get(id);
@@ -435,8 +447,6 @@
     tempMkIni:null, tempMkFin:null
   };
 
-  function tipoColor(t){ return (t==="Limpieza") ? "#22c55e" : "#f97316"; }
-
   function markerPopupHtml(p, titulo, fotoUrl, meta){
     var imgHtml = fotoUrl
       ? '<img class="popup-img" src="' + fotoUrl + '" alt="foto"/>'
@@ -452,8 +462,8 @@
   }
 
   async function drawItem(it, fit){
-    const col = tipoColor(it.tipo);
-    if (map && window.L) {
+    const col = (it && it.tipo === "Limpieza") ? "#22c55e" : "#f97316";
+    if (map && window.L && it && it.inicio && it.fin) {
       var line = L.polyline(
         [
           [it.inicio.lat, it.inicio.lng],
@@ -508,10 +518,15 @@
 
   async function renderAll(){
     clearMapLayers();
-    const items = await getAllItems();
-    state.items = items || [];
-    state.items.sort(function(a,b){ return (a.createdAt || '').localeCompare(b.createdAt || ''); });
-    for (let i=0;i<state.items.length;i++){ await drawItem(state.items[i], false); }
+    let items = [];
+    try { items = await getAllItems(); } catch(e){ items = []; }
+    if (!Array.isArray(items)) items = [];
+    state.items = items;
+    // Guard contra sort si no es función
+    if (Array.isArray(state.items)) {
+      state.items.sort(function(a,b){ return String(a.createdAt||'').localeCompare(String(b.createdAt||'')); });
+      for (let i=0;i<state.items.length;i++){ await drawItem(state.items[i], false); }
+    }
     updatePendingUI();
   }
 
@@ -614,7 +629,7 @@
 
   function fillResumen(){
     var it = state.actual;
-    var col = tipoColor(it.tipo);
+    var col = (it.tipo === "Limpieza") ? "#22c55e" : "#f97316";
     $("resumen").innerHTML =
       '<div class="grid">'
       + '<div><b>Sector:</b> ' + it.sector + '</div>'
@@ -666,7 +681,7 @@
   async function attemptSync(){
     try{
       const items = await getAllItems();
-      const pend = (items||[]).filter(function(it){ return !it.synced; });
+      const pend = (Array.isArray(items) ? items : []).filter(function(it){ return !it.synced; });
       if (!pend.length) return;
       const data = await syncItems(pend);
       const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
@@ -805,63 +820,10 @@
     if(el) el.style.display = 'none';
   }
 
-  // ====== Inline Service Worker (SOLO HTML) ======
-  if ('serviceWorker' in navigator) {
-    const swCode = String.raw`
-      const CACHE = 'brechas-singlehtml-v1';
-      self.addEventListener('install', (e) => {
-        self.skipWaiting();
-        e.waitUntil((async () => {
-          const c = await caches.open(CACHE);
-          try { await c.addAll(['./']); } catch (_) {}
-        })());
-      });
-      self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
-      function isLeaflet(u){ return u.startsWith('https://unpkg.com/leaflet@') || u.includes('tile.openstreetmap.org'); }
-      self.addEventListener('fetch', (event) => {
-        const req = event.request;
-        const url = new URL(req.url);
-        if (url.origin === location.origin) {
-          event.respondWith((async () => {
-            const cache = await caches.open(CACHE);
-            const cached = await cache.match(req);
-            const fetchPromise = fetch(req).then((netRes) => {
-              if (netRes && netRes.ok) { cache.put(req, netRes.clone()); }
-              return netRes;
-            }).catch(() => cached);
-            return cached || fetchPromise;
-          })());
-          return;
-        }
-        if (isLeaflet(req.url)) {
-          event.respondWith((async () => {
-            const cache = await caches.open(CACHE);
-            const cached = await cache.match(req);
-            if (cached) return cached;
-            try {
-              const res = await fetch(req);
-              if (res && res.ok) { cache.put(req, res.clone()); }
-              return res;
-            } catch (e) {
-              return cached || Response.error();
-            }
-          })());
-          return;
-        }
-        event.respondWith((async () => {
-          try { return await fetch(req); } 
-          catch (e) {
-            const cache = await caches.open(CACHE);
-            const cached = await cache.match(req);
-            return cached || Response.error();
-          }
-        })());
-      });
-    `;
-    const blob = new Blob([swCode], { type: 'text/javascript' });
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl, { scope: './' }).catch(function(e){ console.warn('SW no registrado', e); });
-  }
+  // IMPORTANTE: sin archivos extra no podemos registrar ServiceWorker vía blob: en producción.
+  // Por eso, en esta versión v2 NO registramos SW. 
+  // Offline persiste datos/fotos en IndexedDB y puedes seguir trabajando con la pestaña abierta.
+  // Si en el futuro aceptas un archivo sw.js en el root, reactivamos PWA completa sin tocar el resto.
 
   (async function(){ await renderAll(); })();
   </script>
