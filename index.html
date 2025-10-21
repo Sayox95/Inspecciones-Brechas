@@ -39,13 +39,11 @@
     <h1>Captura de Brechas</h1>
     <span class="muted">Móvil • GPS • Fotos</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <span id="pendingBadge" class="chip" style="display:none"></span>
       <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
     </div>
   </header>
 
   <div id="map"></div>
-  <div id="pendingBanner" class="pending-banner">Tienes <strong id="pendingCount">0</strong> reporte(s) pendientes de sincronizar.</div>
 
   <button id="newTramo" class="fab">+ Nuevo tramo</button>
 
@@ -157,13 +155,7 @@ const IMG_MAX = 1280;
 const IMG_QUALITY = 0.82;
 let map, tiles, mapReady=false, pendingRender=false;
 
-// IndexedDB
-const DB_NAME='brechas-db', DB_VER=2, STORE='items'; let db;
-function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME);r.onupgradeneeded=e=>{const db=e.target.result; if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:'id'}); os.createIndex('synced','synced',{unique:false});}}; r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error);});}
-function idbGetAll(){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');const os=tx.objectStore(STORE);const rq=os.getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error);});}
-function idbPut(item){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.objectStore(STORE).put(item);});}
-function idbReplaceAll(items){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');const os=tx.objectStore(STORE);const clr=os.clear(); clr.onsuccess=()=>{items.forEach(it=>os.put(it)); tx.oncomplete=()=>res(true);}; clr.onerror=()=>rej(clr.error);});}
-
+// [offline storage removed for online-first testing]
 const $ = id=>document.getElementById(id);
 const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicio:null, fotoFin:null};}
@@ -176,7 +168,13 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block'
 function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
 function hideBlocker(){$('blocker').style.display='none'}
 function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
-function updatePendingUI(){const n=state.items.filter(x=>!x.synced).length; const b=$('pendingBadge'),ban=$('pendingBanner'),c=$('pendingCount'); if(n>0){b.style.display='inline-block';b.textContent=n+' pendiente(s)';ban.style.display='block';c.textContent=n;}else{b.style.display='none';ban.style.display='none';}}
+function updatePendingUI(){
+  const b = document.getElementById('pendingBadge');
+  const ban = document.getElementById('pendingBanner');
+  if (b) b.style.display='none';
+  if (ban) ban.style.display='none';
+}
+
 
 async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
 async function imageToBlob(file){
@@ -211,8 +209,22 @@ async function fetchAllFromServer(){ if(!APPS_SCRIPT_URL) return []; const url=A
 function normalizePoint(p){ if(!p) return null; if(typeof p==='string'){ const a=p.split(',').map(Number); if(a.length===2 && !isNaN(a[0]) && !isNaN(a[1])) return {lat:a[0],lng:a[1]}; return null;} if(typeof p.lat==='number' && typeof p.lng==='number') return p; return null; }
 function normalizeItem(it){ return { ...it, inicio: normalizePoint(it.inicio), fin: normalizePoint(it.fin) }; }
 
-async function bootstrap(){ await idbOpen(); showBlocker('Cargando datos…'); let local=await idbGetAll(); try{ const server=await fetchAllFromServer(); const ids=new Set(local.map(x=>x.id)); let merged=[...server, ...local.filter(x=>!x.synced), ...server.filter(x=>!ids.has(x.id)&&x.synced)]; merged=merged.map(normalizeItem); state.items=merged; await idbReplaceAll(merged);}catch(e){ state.items=(local||[]).map(normalizeItem); toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.'); } finally { hideBlocker(); if(mapReady){ renderAllIncremental(); } else { pendingRender=true; } updatePendingUI(); } }
+async function bootstrap(){
+  showBlocker('Cargando datos…');
+  try {
+    const server = await fetchAllFromServer();
+    state.items = (server || []).map(normalizeItem);
+  } catch (e) {
+    state.items = [];
+    toast('⚠️ Error al conectar con el servidor.');
+    console.warn(e);
+  } finally {
+    hideBlocker();
+    if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
+  }
+}
 bootstrap();
+
 
 function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
 function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
@@ -249,10 +261,62 @@ async function capInicio(){ const p=await getGPS(); state.actual.inicio=p; if(st
 async function capFin(){ const p=await getGPS(); state.actual.fin=p; if(state.mkFinTemp){try{map && map.removeLayer(state.mkFinTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup(); }
 
 async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; const skipped=[]; for(const it of pendientes){ if(!hasValidPoint(it.inicio)||!hasValidPoint(it.fin)){ skipped.push(it.id); continue; } const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } rec.inicio = { lat: it.inicio.lat, lng: it.inicio.lng }; rec.fin = { lat: it.fin.lat, lng: it.fin.lng }; payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); const resp=await r.json(); resp.skippedIds=skipped; return resp; }
-async function syncPending(){ const pendientes=state.items.filter(x=>!x.synced); if(!pendientes.length){toast('No hay reportes pendientes.'); return;} showBlocker('Sincronizando pendientes…'); try{ const data=await syncToServer(pendientes); const okIds=new Set([...(data.syncedIds||[]),...(data.alreadySyncedIds||[])]); const urlMap=data.urlMap||{}; state.items=state.items.map(x=> okIds.has(x.id) ? {...x, synced:true, fotoInicioUrl:(urlMap[x.id]||{}).inicio||x.fotoInicioUrl||'', fotoFinUrl:(urlMap[x.id]||{}).fin||x.fotoFinUrl||'' } : x); await idbReplaceAll(state.items); if(mapReady){ renderAllIncremental(); } updatePendingUI(); toast('✅ Sincronización completa'); if((data.skippedIds||[]).length){ toast('Algunos reportes se omitieron por coordenadas inválidas.'); } }catch(e){ console.warn(e); toast(e && e.name==='AbortError' ? '⏳ Tiempo agotado. Intenta de nuevo.' : '❌ Error al sincronizar'); } finally{ hideBlocker(); }}
+async function syncPending(){
+  showBlocker('Sincronizando…');
+  try {
+    const data = await fetchAllFromServer();
+    state.items = (data || []).map(normalizeItem);
+    if (mapReady) { renderAllIncremental(); }
+    toast('✅ Datos actualizados');
+  } catch (e) {
+    console.warn(e);
+    toast('❌ Error al sincronizar');
+  } finally {
+    hideBlocker();
+  }
+}
 
 $('newTramo').onclick=()=>{openSheet(); setStep(1)}; $('s1-cancel').onclick=closeSheet; $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); }; $('s2-back').onclick=()=>setStep(1); $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); }; $('s3-back').onclick=()=>setStep(2); $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
-document.getElementById('s4-save').onclick = async ()=>{ if(!hasValidPoint(state.actual.inicio) || !hasValidPoint(state.actual.fin)){ toast('Faltan coordenadas válidas de inicio/fin.'); return; } showBlocker('Guardando…'); const it={ id:crypto.randomUUID(), sector:state.actual.sector, subestacion:state.actual.subestacion, circuito:state.actual.circuito, tipo:state.actual.tipo, inicio:state.actual.inicio, fin:state.actual.fin, fotoInicio:state.actual.fotoInicio, fotoFin:state.actual.fotoFin, createdAt:new Date().toISOString(), synced:false }; state.items.push(it); await idbPut(it); if(mapReady){ drawItem(it,true); } hideBlocker(); closeSheet(); updatePendingUI(); toast(navigator.onLine?'Guardado local. Intentando sincronizar…':'📴 Sin conexión. Quedará pendiente.'); if(navigator.onLine){try{await syncPending()}catch(_){}} };
+document.getElementById('s4-save').onclick = async ()=>{
+  if (!hasValidPoint(state.actual.inicio) || !hasValidPoint(state.actual.fin)){
+    toast('Faltan coordenadas válidas de inicio/fin.');
+    return;
+  }
+  showBlocker('Guardando…');
+  const it = {
+    id: crypto.randomUUID(),
+    sector: state.actual.sector,
+    subestacion: state.actual.subestacion,
+    circuito: state.actual.circuito,
+    tipo: state.actual.tipo,
+    inicio: state.actual.inicio,
+    fin: state.actual.fin,
+    fotoInicio: state.actual.fotoInicio,
+    fotoFin: state.actual.fotoFin,
+    createdAt: new Date().toISOString(),
+    synced: true
+  };
+  try {
+    const resp = await syncToServer([it]);
+    const okIds = new Set([...(resp.syncedIds||[]), ...(resp.alreadySyncedIds||[])]);
+    const urlMap = resp.urlMap || {};
+    if (okIds.has(it.id)) {
+      it.fotoInicioUrl = (urlMap[it.id]||{}).inicio || '';
+      it.fotoFinUrl = (urlMap[it.id]||{}).fin || '';
+      state.items.push(it);
+      if (mapReady){ drawItem(it,true); }
+      closeSheet();
+      toast('✅ Guardado en servidor');
+    } else {
+      toast('❌ No se guardó en servidor');
+    }
+  } catch (e) {
+    console.warn(e);
+    toast('❌ Error al guardar en servidor');
+  } finally {
+    hideBlocker();
+  }
+};
 
 $('cap-inicio').onclick=async ()=>{try{await capInicio(); toast('Punto inicial capturado');}catch(_){toast('No se pudo obtener ubicación')}};
 $('cap-fin').onclick=async ()=>{try{await capFin(); toast('Punto final capturado');}catch(_){toast('No se pudo obtener ubicación')}};
