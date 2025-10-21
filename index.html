@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <link rel="icon" href="data:,"/>
   <title>Captura de Brechas — Móvil Optimizado</title>
+
+  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
     :root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
     *{box-sizing:border-box} html,body{height:100%}
@@ -139,18 +142,13 @@
   <div id="toast" class="toast"></div>
 
 <script>
-// --- Polyfills y utilidades para móviles ---
-// requestIdleCallback para Safari/iOS antiguos
-window.requestIdleCallback = window.requestIdleCallback || function(cb){
-  return setTimeout(()=>cb({ timeRemaining:()=>0, didTimeout:true }), 1);
-};
+// Polyfills
+window.requestIdleCallback = window.requestIdleCallback || function(cb){ return setTimeout(()=>cb({ timeRemaining:()=>0, didTimeout:true }), 1); };
 window.cancelIdleCallback = window.cancelIdleCallback || function(id){ clearTimeout(id); };
 
-// Esperar a que Leaflet (L) esté disponible aunque el script sea defer
 function whenLeafletReady(cb){
   if (window.L) return cb();
   const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
-  // Fallback extra al load del documento
   window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
 }
 
@@ -159,86 +157,84 @@ const IMG_MAX = 1280;
 const IMG_QUALITY = 0.82;
 let map, tiles, mapReady=false, pendingRender=false;
 
-// IndexedDB wrapper
-const DB_NAME = 'brechas-db'; const DB_VER = 1; const STORE = 'items'; let db;
-function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const db=e.target.result; if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:'id'}); os.createIndex('synced','synced',{unique:false});}}; r.onsuccess=()=>{db=r.result; res(db)}; r.onerror=()=>rej(r.error);});}
+// IndexedDB
+const DB_NAME='brechas-db', DB_VER=1, STORE='items'; let db;
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);r.onupgradeneeded=e=>{const db=e.target.result; if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:'id'}); os.createIndex('synced','synced',{unique:false});}}; r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error);});}
 function idbGetAll(){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');const os=tx.objectStore(STORE);const rq=os.getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error);});}
 function idbPut(item){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.objectStore(STORE).put(item);});}
 function idbReplaceAll(items){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');const os=tx.objectStore(STORE);const clr=os.clear(); clr.onsuccess=()=>{items.forEach(it=>os.put(it)); tx.oncomplete=()=>res(true);}; clr.onerror=()=>rej(clr.error);});}
 
 const $ = id=>document.getElementById(id);
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null };
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicio:null, fotoFin:null};}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
-function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false);} 
+function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false);}
 function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
-function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);} 
-function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);} 
-function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'} 
-function hideBlocker(){$('blocker').style.display='none'} 
-function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'} 
+function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
+function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
+function hideBlocker(){$('blocker').style.display='none'}
+function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 function updatePendingUI(){const n=state.items.filter(x=>!x.synced).length; const b=$('pendingBadge'),ban=$('pendingBanner'),c=$('pendingCount'); if(n>0){b.style.display='inline-block';b.textContent=n+' pendiente(s)';ban.style.display='block';c.textContent=n;}else{b.style.display='none';ban.style.display='none';}}
 
-// Imagen: compatibilidad con navegadores sin OffscreenCanvas
 async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
 async function imageToBlob(file){
-  const bmp = await readImageBitmap(file);
+  const bmp=await readImageBitmap(file);
   const ratio=Math.min(1, IMG_MAX/Math.max(bmp.width,bmp.height));
   const w=Math.round(bmp.width*ratio), h=Math.round(bmp.height*ratio);
   let canvas;
-  if (typeof OffscreenCanvas !== 'undefined') {
-    canvas = new OffscreenCanvas(w,h);
-  } else {
-    canvas = document.createElement('canvas'); canvas.width=w; canvas.height=h;
-  }
-  const ctx = canvas.getContext('2d',{alpha:false}); ctx.drawImage(bmp,0,0,w,h);
-  async function toBlob(c,type,q){
-    if (c.convertToBlob) return await c.convertToBlob({type, quality:q});
-    return await new Promise(res=> c.toBlob(res, type, q));
-  }
-  try { return await toBlob(canvas,'image/webp',IMG_QUALITY); }
-  catch(_) { return await toBlob(canvas,'image/jpeg',IMG_QUALITY); }
+  if (typeof OffscreenCanvas!=='undefined'){ canvas=new OffscreenCanvas(w,h); }
+  else { canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; }
+  const ctx=canvas.getContext('2d',{alpha:false}); ctx.drawImage(bmp,0,0,w,h);
+  async function toBlob(c,t,q){ if(c.convertToBlob) return await c.convertToBlob({type:t,quality:q}); return await new Promise(r=>c.toBlob(r,t,q)); }
+  try { return await toBlob(canvas,'image/webp',IMG_QUALITY); } catch(_){ return await toBlob(canvas,'image/jpeg',IMG_QUALITY); }
 }
-function blobUrl(b){return URL.createObjectURL(b)} 
+function blobUrl(b){return URL.createObjectURL(b)}
 async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
 
-function getGPS(){return new Promise((res,rej)=>{if(!navigator.geolocation)return rej(new Error('Geolocalización no disponible')); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()}), err=>rej(err), {enableHighAccuracy:true, timeout:10000, maximumAge:0});});}
+function getGPS(){return new Promise((res,rej)=>{ if(!navigator.geolocation) return rej(new Error('Geolocalización no disponible')); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()}), err=>rej(err), {enableHighAccuracy:true, timeout:10000, maximumAge:0}); });}
 
 function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
-
-// En vez de ejecutar inmediatamente, esperamos a que Leaflet cargue
 whenLeafletReady(()=>{ initMapOnce(); });
 
 async function fetchAllFromServer(){ if(!APPS_SCRIPT_URL) return []; const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all'; const r=await fetch(url,{method:'GET'}); if(!r.ok) throw new Error('HTTP '+r.status); const data=await r.json(); const rows=Array.isArray(data.records)?data.records:[]; return rows.map(r=>{const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number); const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null; const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null; return {id:r.id,sector:r.sector||'',subestacion:r.subestacion||'',circuito:r.circuito||'',tipo:r.tipo||'Apertura',inicio:ini,fin:fin,fotoInicioUrl:r.fotoInicioUrl||'',fotoFinUrl:r.fotoFinUrl||'',synced:true,createdAt:r.createdAt||new Date().toISOString()};});}
-async function bootstrap(){ await idbOpen(); showBlocker('Cargando datos…'); let local=await idbGetAll(); try{ const server=await fetchAllFromServer(); const ids=new Set(local.map(x=>x.id)); const merged=[...server, ...local.filter(x=>!x.synced), ...server.filter(x=>!ids.has(x.id)&&x.synced)]; state.items=merged; await idbReplaceAll(merged);}catch(e){state.items=local; toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.');} finally{ hideBlocker(); if(mapReady){ renderAllIncremental(); } else { pendingRender=true; } updatePendingUI(); }} bootstrap();
+function normalizePoint(p){ if(!p) return null; if(typeof p==='string'){ const a=p.split(',').map(Number); if(a.length===2 && !isNaN(a[0]) && !isNaN(a[1])) return {lat:a[0],lng:a[1]}; return null;} if(typeof p.lat==='number' && typeof p.lng==='number') return p; return null; }
+function normalizeItem(it){ return { ...it, inicio: normalizePoint(it.inicio), fin: normalizePoint(it.fin) }; }
 
-function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] } 
+async function bootstrap(){ await idbOpen(); showBlocker('Cargando datos…'); let local=await idbGetAll(); try{ const server=await fetchAllFromServer(); const ids=new Set(local.map(x=>x.id)); let merged=[...server, ...local.filter(x=>!x.synced), ...server.filter(x=>!ids.has(x.id)&&x.synced)]; merged=merged.map(normalizeItem); state.items=merged; await idbReplaceAll(merged);}catch(e){ state.items=(local||[]).map(normalizeItem); toast('⚠️ Sin conexión al servidor. Mostrando pendientes locales.'); } finally { hideBlocker(); if(mapReady){ renderAllIncremental(); } else { pendingRender=true; } updatePendingUI(); } }
+bootstrap();
+
+function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
 function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
-function markerPopupHtml(p,t,f,m){const img=f?`<img class="popup-img" loading="lazy" src="${f}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>'; return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}</div><div class="popup-meta">${m}</div>${img}</div>`;}
-function drawItem(it,fit=false){ if(!it.inicio||!it.fin) return; const col=tipoColor(it.tipo); const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, it.fotoInicioUrl||it.fotoInicio||'', `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, it.fotoFinUrl||it.fotoFin||'', `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkIni); addLayer(mkFin); if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}}
-function renderAllIncremental(){ if(!map) return; clearMapLayers(); const items=[...state.items]; let i=0; function chunk(){ const start=performance.now(); while(i<items.length && (performance.now()-start)<8){ drawItem(items[i++], false); } if(i<items.length) requestIdleCallback(chunk,{timeout:60}); } requestIdleCallback(chunk,{timeout:60}); }
+function hasValidPoint(p){return !!(p && typeof p.lat==='number' && !isNaN(p.lat) && typeof p.lng==='number' && !isNaN(p.lng));}
+function getPhotoSrc(it, which){ const urlKey=which==='inicio'?'fotoInicioUrl':'fotoFinUrl'; const blobKey=which==='inicio'?'fotoInicio':'fotoFin'; if(it[urlKey]) return it[urlKey]; const b=it[blobKey]; if(b instanceof Blob){ const key=it.id+':'+blobKey; if(!state._objUrls.has(key)) state._objUrls.set(key, URL.createObjectURL(b)); return state._objUrls.get(key);} return ''; }
+function markerPopupHtml(p,t,f,m){ const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas'; const img=f?`<img class="popup-img" loading="lazy" src="${f}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>'; return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`; }
+function drawItem(it,fit=false){ if(!hasValidPoint(it.inicio) || !hasValidPoint(it.fin)) return; const col=tipoColor(it.tipo); const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const fIni=getPhotoSrc(it,'inicio'); const fFin=getPhotoSrc(it,'fin'); mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkIni); addLayer(mkFin); if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));} }
+function renderAllIncremental(){ if(!map) return; clearMapLayers(); const items=[...state.items]; let i=0; function chunk(){ const start=performance.now(); while(i<items.length && (performance.now()-start)<8){ drawItem(items[i++], false);} if(i<items.length) requestIdleCallback(chunk,{timeout:60}); } requestIdleCallback(chunk,{timeout:60}); }
 
 function clearWizard(resetAll=true){ if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicio=null;state.actual.fotoFin=null} $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura'; $('fotoInicio').value='';$('fotoFin').value='';$('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');$('previewInicio').src='';$('previewFin').src='';}
 function validateStep1(){ const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim(); if(!sector||!sub||!circ) return false; Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value}); return true; }
 async function validateStep2(){ if(!state.actual.inicio){try{await capInicio()}catch(_){}} const f=$('fotoInicio').files[0]; if(!state.actual.inicio||!f) return false; const b=await imageToBlob(f); state.actual.fotoInicio=b; $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); return true; }
 async function validateStep3(){ if(!state.actual.fin){try{await capFin()}catch(_){}} const f=$('fotoFin').files[0]; if(!state.actual.fin||!f) return false; const b=await imageToBlob(f); state.actual.fotoFin=b; $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); return true; }
-function fillResumen(){ const it=state.actual, col=tipoColor(it.tipo); $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${it.inicio?it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6):'-'}</div><div><b>Final:</b> ${it.fin?it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6):'-'}</div></div>`; }
+function fillResumen(){ const it=state.actual, col=tipoColor(it.tipo); const ini=hasValidPoint(it.inicio)?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-'; const fin=hasValidPoint(it.fin)?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-'; $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`; }
 
 async function capInicio(){ const p=await getGPS(); state.actual.inicio=p; if(state.mkInicioTemp){try{map && map.removeLayer(state.mkInicioTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup(); }
 async function capFin(){ const p=await getGPS(); state.actual.fin=p; if(state.mkFinTemp){try{map && map.removeLayer(state.mkFinTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup(); }
 
-async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; for(const it of pendientes){ const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } if(it.inicio && typeof it.inicio==='object'){ rec.inicio = `${it.inicio.lat},${it.inicio.lng}`;} if(it.fin && typeof it.fin==='object'){ rec.fin = `${it.fin.lat},${it.fin.lng}`;} payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
-async function syncPending(){ const pendientes=state.items.filter(x=>!x.synced); if(!pendientes.length){toast('No hay reportes pendientes.'); return;} showBlocker('Sincronizando pendientes…'); try{ const data=await syncToServer(pendientes); const okIds=new Set([...(data.syncedIds||[]),...(data.alreadySyncedIds||[])]); const urlMap=data.urlMap||{}; state.items=state.items.map(x=> okIds.has(x.id) ? {...x, synced:true, fotoInicioUrl:(urlMap[x.id]||{}).inicio||x.fotoInicioUrl||'', fotoFinUrl:(urlMap[x.id]||{}).fin||x.fotoFinUrl||'' } : x); await idbReplaceAll(state.items); if(mapReady){ renderAllIncremental(); } updatePendingUI(); toast('✅ Sincronización completa'); }catch(e){ console.warn(e); toast(e && e.name==='AbortError' ? '⏳ Tiempo agotado. Intenta de nuevo.' : '❌ Error al sincronizar'); } finally{ hideBlocker(); }}
+async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; const skipped=[]; for(const it of pendientes){ if(!hasValidPoint(it.inicio)||!hasValidPoint(it.fin)){ skipped.push(it.id); continue; } const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } rec.inicio = `${it.inicio.lat},${it.inicio.lng}`; rec.fin = `${it.fin.lat},${it.fin.lng}`; payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); const resp=await r.json(); resp.skippedIds=skipped; return resp; }
+async function syncPending(){ const pendientes=state.items.filter(x=>!x.synced); if(!pendientes.length){toast('No hay reportes pendientes.'); return;} showBlocker('Sincronizando pendientes…'); try{ const data=await syncToServer(pendientes); const okIds=new Set([...(data.syncedIds||[]),...(data.alreadySyncedIds||[])]); const urlMap=data.urlMap||{}; state.items=state.items.map(x=> okIds.has(x.id) ? {...x, synced:true, fotoInicioUrl:(urlMap[x.id]||{}).inicio||x.fotoInicioUrl||'', fotoFinUrl:(urlMap[x.id]||{}).fin||x.fotoFinUrl||'' } : x); await idbReplaceAll(state.items); if(mapReady){ renderAllIncremental(); } updatePendingUI(); toast('✅ Sincronización completa'); if((data.skippedIds||[]).length){ toast('Algunos reportes se omitieron por coordenadas inválidas.'); } }catch(e){ console.warn(e); toast(e && e.name==='AbortError' ? '⏳ Tiempo agotado. Intenta de nuevo.' : '❌ Error al sincronizar'); } finally{ hideBlocker(); }}
 
-$('newTramo').onclick=()=>{openSheet(); setStep(1)}; $('s1-cancel').onclick=closeSheet; $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); }; $('s2-back').onclick=()=>setStep(1); $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); }; $('s3-back').onclick=()=>setStep(2); $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); }; $('s4-cancel').onclick=closeSheet; $('s4-save').onclick=async ()=>{ showBlocker('Guardando…'); const it={ id:crypto.randomUUID(), sector:state.actual.sector, subestacion:state.actual.subestacion, circuito:state.actual.circuito, tipo:state.actual.tipo, inicio:state.actual.inicio, fin:state.actual.fin, fotoInicio:state.actual.fotoInicio, fotoFin:state.actual.fotoFin, createdAt:new Date().toISOString(), synced:false }; state.items.push(it); await idbPut(it); if(mapReady){ drawItem(it,true); } hideBlocker(); closeSheet(); updatePendingUI(); toast(navigator.onLine?'Guardado local. Intentando sincronizar…':'📴 Sin conexión. Quedará pendiente.'); if(navigator.onLine){try{await syncPending()}catch(_){}} };
-$('cap-inicio').onclick=async ()=>{try{await capInicio(); toast('Punto inicial capturado');}catch(_){toast('No se pudo obtener ubicación')}}; 
-$('cap-fin').onclick=async ()=>{try{await capFin(); toast('Punto final capturado');}catch(_){toast('No se pudo obtener ubicación')}}; 
+$('newTramo').onclick=()=>{openSheet(); setStep(1)}; $('s1-cancel').onclick=closeSheet; $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); }; $('s2-back').onclick=()=>setStep(1); $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); }; $('s3-back').onclick=()=>setStep(2); $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
+document.getElementById('s4-save').onclick = async ()=>{ if(!hasValidPoint(state.actual.inicio) || !hasValidPoint(state.actual.fin)){ toast('Faltan coordenadas válidas de inicio/fin.'); return; } showBlocker('Guardando…'); const it={ id:crypto.randomUUID(), sector:state.actual.sector, subestacion:state.actual.subestacion, circuito:state.actual.circuito, tipo:state.actual.tipo, inicio:state.actual.inicio, fin:state.actual.fin, fotoInicio:state.actual.fotoInicio, fotoFin:state.actual.fotoFin, createdAt:new Date().toISOString(), synced:false }; state.items.push(it); await idbPut(it); if(mapReady){ drawItem(it,true); } hideBlocker(); closeSheet(); updatePendingUI(); toast(navigator.onLine?'Guardado local. Intentando sincronizar…':'📴 Sin conexión. Quedará pendiente.'); if(navigator.onLine){try{await syncPending()}catch(_){}} };
+
+$('cap-inicio').onclick=async ()=>{try{await capInicio(); toast('Punto inicial capturado');}catch(_){toast('No se pudo obtener ubicación')}};
+$('cap-fin').onclick=async ()=>{try{await capFin(); toast('Punto final capturado');}catch(_){toast('No se pudo obtener ubicación')}};
 $('fotoInicio').addEventListener('change', async e=>{ if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); state.actual.fotoInicio=b; }});
 $('fotoFin').addEventListener('change', async e=>{ if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); state.actual.fotoFin=b; }});
 $('syncBtn').addEventListener('click', syncPending);
 
-document.addEventListener('click', e=>{const el=e.target; if(el && el.classList && el.classList.contains('preview')){ try{ window.open(el.src,'_blank'); }catch(_){}}}); 
+document.addEventListener('click', e=>{const el=e.target; if(el && el.classList && el.classList.contains('preview')){ try{ window.open(el.src,'_blank'); }catch(_){}}});
 window.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && map){ setTimeout(()=>map.invalidateSize(),150); } }, {passive:true});
 </script>
 </body>
