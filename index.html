@@ -8,26 +8,7 @@
 
   <!-- Leaflet (sin integrity/crossorigin para evitar SRI mismatch) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-function toast(msg){
-  let t = document.getElementById('toast');
-  if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
-  t.textContent = msg;
-  t.style.display='block';
-  setTimeout(()=>{ t.style.display='none'; }, 3000);
-}
-
-function showBlocker(text){
-  const el = document.getElementById('blocker');
-  const tx = document.getElementById('blockerText');
-  if(tx) tx.textContent = text || 'Sincronizando…';
-  if(el) el.style.display = 'flex';
-}
-function hideBlocker(){
-  const el = document.getElementById('blocker');
-  if(el) el.style.display = 'none';
-}
-</script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 
 
