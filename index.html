@@ -1,726 +1,238 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <link rel="icon" href="data:,">
-  <title>Captura de Brechas (Móvil) — Refactor 2025-10 v3</title>
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-    :root{
-      --bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;
-      --accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;
-      --border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;
-      background:var(--bg);color:var(--text);overflow:hidden}
-    header{position:fixed;top:0;left:0;right:0;z-index:10;
-      display:flex;align-items:center;gap:10px;
-      background:rgba(11,18,32,.9);backdrop-filter:blur(8px);
-      border-bottom:1px solid var(--border);padding:12px 14px}
-    header h1{margin:0;font-size:16px}
-    header .muted{color:var(--muted);font-size:12px}
-    #map{position:absolute;inset:52px 0 0 0}
-    .fab{position:fixed;right:16px;bottom:16px;z-index:1100;
-      border:0;border-radius:999px;background:var(--accent);color:#051423;
-      padding:14px 16px;font-weight:800;box-shadow:var(--shadow);}
-    .fab:active{transform:translateY(1px)}
-    .fab[disabled]{opacity:.6;pointer-events:none}
-
-    /* Bottom Sheet */
-    .sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:2000;
-      background:var(--sheet);border-top-left-radius:20px;border-top-right-radius:20px;
-      border:1px solid var(--border);box-shadow:0 -12px 30px rgba(0,0,0,.45);
-      transition:bottom .28s ease;max-height:82vh;display:flex;flex-direction:column}
-    .sheet.open{bottom:0}
-    .sheet .drag{width:56px;height:5px;border-radius:999px;background:#24314f;margin:8px auto}
-    .sheet .content{padding:12px;overflow:auto}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .field{display:flex;flex-direction:column;gap:6px}
-    label{font-size:12px;color:var(--muted)}
-    input[type="text"],select,input[type="file"]{
-      width:100%;background:#0e1729;color:var(--text);
-      border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px
-    }
-    .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;
-      background:#183055;color:#e6f0ff;width:100%;font-weight:700}
-    .btn[disabled]{opacity:.6;pointer-events:none}
-    .btn-primary{background:var(--accent);color:#051423}
-    .btn-ok{background:var(--ok);color:#06240e}
-    .btn-warn{background:var(--warn);color:#2b0d02}
-    .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff}
-    .btn-danger{background:var(--danger);}
-    .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .chips{display:flex;gap:8px;flex-wrap:wrap}
-    .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)}
-    .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
-    .apertura{background:var(--warn)} .limpieza{background:var(--ok)}
-    .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)}
-    .hidden{display:none!important}
-
-    /* Summary card */
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px}
-    .grid{display:grid;gap:8px}
-    img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:transform .2s ease}
-    img.preview:hover{transform:scale(1.05)}
-
-    /* Popup content */
-    .popup-title{font-weight:800;margin-bottom:4px}
-    .popup-meta{font-size:12px;color:#9fb3c7}
-    .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
-
-    .pending-banner{position:fixed;left:0;right:0;bottom:0;z-index:1500;
-      background:#2a1d0b;color:#ffe7c2;border-top:1px solid #4b2e0f;
-      padding:8px 12px;font-size:13px;display:none}
-    .pending-banner strong{color:#ffd39a}
-
-    /* Fullscreen blocker */
-    .blocker{
-      position:fixed; inset:0; z-index:3000;
-      display:none; align-items:center; justify-content:center;
-      background:rgba(5,10,20,.55); backdrop-filter:blur(2px);
-    }
-    .blocker .box{
-      background:#0e1729; border:1px solid #203153; color:#eaf2ff;
-      padding:16px 18px; border-radius:14px; min-width:240px;
-      box-shadow:0 10px 30px rgba(0,0,0,.35); text-align:center;
-      font-weight:600;
-    }
-    .spinner{
-      width:22px; height:22px; border-radius:50%;
-      border:3px solid #29436f; border-top-color:#4cc9f0;
-      animation:sp 0.9s linear infinite; display:inline-block; margin-right:10px;
-      vertical-align:middle;
-    }
-    @keyframes sp{to{transform:rotate(360deg);}}
-
-    /* Toast */
-    .toast{
-      position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
-      background:#0e1729; color:#eaf2ff; border:1px solid #203153;
-      padding:10px 14px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
-      z-index:4000; display:none; font-weight:600; max-width:90vw; text-align:center;
-    }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<link rel="icon" href="data:,"/>
+<title>Captura de Brechas — Móvil Optimizado v5</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--border:#1d2a45}
+*{box-sizing:border-box} html,body{height:100%} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;background:var(--bg);color:var(--text);overflow:hidden}
+header{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:8px;background:#0b1220e6;border-bottom:1px solid var(--border);padding:10px 12px}
+#map{position:absolute;inset:48px 0 0 0;touch-action:manipulation}
+.card{background:#0f182a;border:1px solid var(--border);border-radius:12px;padding:10px}
+.hidden{display:none!important} .grid{display:grid;gap:8px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input,select{width:100%;background:#0e1729;color:#ecf3ff;border:1px solid #1f2c49;border-radius:10px;padding:10px 12px}
+.btn{appearance:none;border:0;border-radius:10px;padding:10px 12px;background:#183055;color:#e6f0ff;font-weight:700}
+.btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153}
+.fab{position:fixed;right:12px;bottom:12px;z-index:1100;border:0;border-radius:999px;background:var(--accent);color:#051423;padding:12px 14px;font-weight:800}
+.sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:2000;background:#0b1220;border-top:1px solid var(--border);border-top-left-radius:16px;border-top-right-radius:16px;transition:bottom .25s;max-height:82vh;display:flex;flex-direction:column}
+.sheet.open{bottom:0} .content{padding:12px;overflow:auto}
+img.preview{width:160px;border-radius:10px;border:1px solid #1f2c49}
+.toast{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:8px 12px;border-radius:10px;display:none}
+.popup-img{width:200px;max-width:80vw;border-radius:10px;border:1px solid #1f2c49;margin-top:6px}
+.badge{border:1px solid #203153;padding:4px 8px;border-radius:999px;color:#8aa0b6}
+</style>
 </head>
 <body>
-  <header>
-    <h1>Captura de Brechas</h1>
-    <span class="muted">Móvil • GPS • Fotos</span>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <span id="pendingBadge" class="chip" style="display:none"></span>
-      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
-    </div>
-  </header>
+<header>
+  <strong>Captura de Brechas</strong>
+  <span id="pendingBadge" class="badge" style="margin-left:auto;display:none"></span>
+  <button id="syncBtn" class="btn btn-ghost">🔄 Sincronizar</button>
+</header>
+<div id="map"></div>
+<button id="newTramo" class="fab">+ Tramo</button>
 
-  <div id="map"></div>
-  <div id="pendingBanner" class="pending-banner">Tienes <strong id="pendingCount">0</strong> reporte(s) pendientes de sincronizar.</div>
-
-  <!-- Floating Action -->
-  <button id="newTramo" class="fab">+ Nuevo tramo</button>
-
-  <!-- Bottom Sheet / Stepper -->
-  <section id="sheet" class="sheet" aria-modal="true" role="dialog">
-    <div class="drag"></div>
-    <div class="content">
-      <div id="step-1" class="grid">
-        <div class="card">
-          <div class="chips" style="margin-bottom:8px">
-            <span class="chip"><span class="color-box apertura"></span>Apertura</span>
-            <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Sector</label>
-              <input id="sector" type="text" placeholder="Ej: Norte">
-            </div>
-            <div class="field">
-              <label>Subestación</label>
-              <input id="subestacion" type="text" placeholder="Ej: S/E Progreso">
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Circuito</label>
-              <input id="circuito" type="text" placeholder="Ej: CIR-123">
-            </div>
-            <div class="field">
-              <label>Tipo de brecha</label>
-              <select id="tipo">
-                <option value="Apertura">Apertura de brecha</option>
-                <option value="Limpieza">Limpieza de brecha</option>
-              </select>
-            </div>
-          </div>
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
-          <div class="bar" style="margin-top:10px">
-            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s1-next" class="btn btn-primary">Siguiente</button>
-          </div>
+<section id="sheet" class="sheet" role="dialog" aria-modal="true">
+  <div class="content">
+    <div id="step-1" class="grid">
+      <div class="card">
+        <div class="row">
+          <div><label>Sector</label><input id="sector" placeholder="Ej: Norte"></div>
+          <div><label>Subestación</label><input id="subestacion" placeholder="Ej: S/E Progreso"></div>
         </div>
-      </div>
-
-      <div id="step-2" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto obligatoria</u>.</div>
-          <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
-          <div class="field">
-            <label>Foto punto inicial (requerida)</label>
-            <input id="fotoInicio" type="file" accept="image/*" capture="environment">
-          </div>
-          <div id="previewInicioWrap" class="hidden">
-            <img id="previewInicio" class="preview" alt="Foto inicio"/>
-          </div>
-          <div class="bar">
-            <button id="s2-back" class="btn btn-ghost">Atrás</button>
-            <button id="s2-next" class="btn btn-primary">Siguiente</button>
-          </div>
+        <div class="row">
+          <div><label>Circuito</label><input id="circuito" placeholder="Ej: CIR-123"></div>
+          <div><label>Tipo</label><select id="tipo"><option>Apertura</option><option>Limpieza</option></select></div>
         </div>
-      </div>
-
-      <div id="step-3" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto obligatoria</u>.</div>
-          <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
-          <div class="field">
-            <label>Foto punto final (requerida)</label>
-            <input id="fotoFin" type="file" accept="image/*" capture="environment">
-          </div>
-          <div id="previewFinWrap" class="hidden">
-            <img id="previewFin" class="preview" alt="Foto final"/>
-          </div>
-          <div class="bar">
-            <button id="s3-back" class="btn btn-ghost">Atrás</button>
-            <button id="s3-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="step-4" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Resumen</strong> — revisa y guarda.</div>
-          <div id="resumen" class="grid"></div>
-          <div class="bar">
-            <button id="s4-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s4-save" class="btn btn-ok">Guardar tramo</button>
-          </div>
+        <div class="row" style="margin-top:6px">
+          <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
+          <button id="s1-next" class="btn btn-primary">Siguiente</button>
         </div>
       </div>
     </div>
-  </section>
 
-  <script>
-    "use strict";
+    <div id="step-2" class="grid hidden">
+      <div class="card grid">
+        <div><b>Paso 2:</b> Captura <u>punto inicial</u> + foto.</div>
+        <div class="row">
+          <button id="cap-inicio" class="btn btn-primary">📍 GPS inicio</button>
+          <button id="cap-inicio-tap" class="btn btn-ghost">👆 Tocar mapa</button>
+        </div>
+        <div><label>Foto inicio</label><input id="fotoInicio" type="file" accept="image/*" capture="environment"></div>
+        <div id="previewInicioWrap" class="hidden"><img id="previewInicio" class="preview" alt="Foto inicio"/></div>
+        <div class="row">
+          <button id="s2-back" class="btn btn-ghost">Atrás</button>
+          <button id="s2-next" class="btn btn-primary">Siguiente</button>
+        </div>
+      </div>
+    </div>
 
-    // ====== CONFIG ======
-    const APPS_SCRIPT_URL = "/api/sync"; // pega tu URL de Web App para sincronizar
+    <div id="step-3" class="grid hidden">
+      <div class="card grid">
+        <div><b>Paso 3:</b> Captura <u>punto final</u> + foto.</div>
+        <div class="row">
+          <button id="cap-fin" class="btn btn-primary">📍 GPS final</button>
+          <button id="cap-fin-tap" class="btn btn-ghost">👆 Tocar mapa</button>
+        </div>
+        <div><label>Foto final</label><input id="fotoFin" type="file" accept="image/*" capture="environment"></div>
+        <div id="previewFinWrap" class="hidden"><img id="previewFin" class="preview" alt="Foto final"/></div>
+        <div class="row">
+          <button id="s3-back" class="btn btn-ghost">Atrás</button>
+          <button id="s3-next" class="btn btn-primary">Siguiente</button>
+        </div>
+      </div>
+    </div>
 
-    // ====== MAPA ======
-    const map = L.map('map', { zoomControl: true });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 20, attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
-
-    // Centrado inicial a ubicación del usuario (con UX de carga)
-    function locate() {
-      if (navigator.geolocation) {
-        showBlocker('Obteniendo ubicación…');
-        getGPSFast().then((p)=>{
-          hideBlocker();
-          map.setView([p.lat, p.lng], 17);
-        }).catch(()=>{
-          hideBlocker();
-          map.setView([14.0723,-87.1921], 7);
-          toast('No fue posible obtener tu ubicación inicial.');
-        });
-      } else {
-        map.setView([14.0723,-87.1921], 7);
-      }
-    }
-    locate();
-
-    // ====== Estado ======
-    const $ = (id)=> document.getElementById(id);
-    const sheet = $("sheet");
-    let step = 1;
-    const state = {
-      actual: {
-        sector:"", subestacion:"", circuito:"", tipo:"Apertura",
-        inicio:null, fin:null, fotoInicio:null, fotoFin:null
-      },
-      items: [], layers: [],
-      mkInicioTemp:null, mkFinTemp:null
-    };
-
-    // cargar items de localStorage
-    try{ state.items = JSON.parse(localStorage.getItem("brechas_items")||"[]"); }catch(e){ state.items = []; }
-    renderAll();
-    updatePendingUI();
-
-    // ====== Utiles ======
-    function openSheet(){ sheet.classList.add("open"); }
-    function closeSheet(){ sheet.classList.remove("open"); setStep(1); clearWizard(false); }
-    function show(id){ var el = $(id); if(el) el.classList.remove("hidden"); }
-    function hide(id){ var el = $(id); if(el) el.classList.add("hidden"); }
-    function setStep(n){
-      step = n;
-      ["step-1","step-2","step-3","step-4"].forEach(function(s){ hide(s); });
-      show("step-"+n);
-    }
-    function tipoColor(t){ return (t==="Limpieza") ? "#22c55e" : "#f97316"; }
-    function addLayer(layer){ state.layers.push(layer); layer.addTo(map); }
-    function clearMapLayers(){
-      state.layers.forEach(function(l){
-        try{ map.removeLayer(l); }catch(_){ /* ignore */ }
-      });
-      state.layers = [];
-    }
-
-    // Imagen: compresión agresiva para móviles (evita desbordar localStorage)
-    async function compressImage(file, maxW=1280, maxH=1280, quality=0.72){
-      if(!file) return null;
-      const img = await new Promise((res,rej)=>{
-        const reader = new FileReader();
-        reader.onload = ()=>{
-          const i = new Image();
-          i.onload = ()=> res(i);
-          i.onerror = rej;
-          i.src = reader.result;
-        };
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
-      const width = img.width;
-      const height = img.height;
-      const ratio = Math.min(maxW / width, maxH / height, 1);
-      const w = Math.round(width * ratio);
-      const h = Math.round(height * ratio);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d', { alpha:false });
-      ctx.drawImage(img, 0, 0, w, h);
-      return canvas.toDataURL('image/jpeg', quality);
-    }
-
-    function fileToDataURL(file){ return new Promise((resolve,reject)=>{
-      if(!file) return resolve(null);
-      const r = new FileReader();
-      r.onload = ()=> resolve(r.result);
-      r.onerror = reject; r.readAsDataURL(file);
-    });}
-
-    // Geolocalización rápida: primer fix con watchPosition (mejor para móviles)
-    function getGPSFast(){
-      return new Promise((resolve,reject)=>{
-        if(!navigator.geolocation) return reject(new Error("Geolocalización no disponible"));
-        let done = false;
-        const opts = { enableHighAccuracy:true, timeout:15000, maximumAge:30000 };
-        const id = navigator.geolocation.watchPosition(function(pos){
-          if(done) return;
-          done = true;
-          try{ navigator.geolocation.clearWatch(id); }catch(_){}
-          resolve({ lat:pos.coords.latitude, lng:pos.coords.longitude, ts:Date.now(), acc:pos.coords.accuracy });
-        }, function(err){
-          if(done) return;
-          done = true;
-          try{ navigator.geolocation.clearWatch(id); }catch(_){}
-          reject(err);
-        }, opts);
-        setTimeout(function(){
-          if(!done){
-            done = true;
-            try{ navigator.geolocation.clearWatch(id); }catch(_){}
-            reject(new Error('timeout'));
-          }
-        }, 16000);
-      });
-    }
-
-    function markerPopupHtml(p, titulo, fotoDataUrl, meta){
-      var imgHtml = fotoDataUrl
-        ? '<img class="popup-img" src="' + fotoDataUrl + '" alt="foto"/>'
-        : '<div class="popup-meta">Sin foto</div>';
-      return (
-        '<div style="min-width:220px">' +
-          '<div class="popup-title">' + titulo + '</div>' +
-          '<div class="popup-meta">Lat: ' + p.lat.toFixed(6) + ' &middot; Lng: ' + p.lng.toFixed(6) + (p.acc ? ' • ±' + Math.round(p.acc) + 'm' : '') + '</div>' +
-          '<div class="popup-meta">' + meta + '</div>' +
-          imgHtml +
-        '</div>'
-      );
-    }
-
-    function drawItem(it, fit){
-      var col = tipoColor(it.tipo);
-
-      // Línea
-      var line = L.polyline(
-        [
-          [it.inicio.lat, it.inicio.lng],
-          [it.fin.lat, it.fin.lng]
-        ],
-        { color: col, weight: 5, opacity: 0.95 }
-      );
-      addLayer(line);
-
-      // Marcador inicio
-      var mkIni = L.circleMarker([it.inicio.lat, it.inicio.lng], { radius:7, color:col, fillColor:col, fillOpacity:0.95 });
-      mkIni.bindPopup(function(){
-        return markerPopupHtml(it.inicio, 'INICIO — ' + it.circuito, it.fotoInicio, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
-      });
-      addLayer(mkIni);
-
-      // Marcador final
-      var mkFin = L.circleMarker([it.fin.lat, it.fin.lng], { radius:7, color:col, fillColor:col, fillOpacity:0.95 });
-      mkFin.bindPopup(function(){
-        return markerPopupHtml(it.fin, 'FINAL — ' + it.circuito, it.fotoFin, it.sector + ' • ' + it.subestacion + ' • ' + it.tipo);
-      });
-      addLayer(mkFin);
-
-      // Click en la línea abre resumen
-      line.on("click", function(){
-        var mid = [(it.inicio.lat + it.fin.lat)/2, (it.inicio.lng + it.fin.lng)/2];
-        var html = ''
-          + '<div style="min-width:240px">'
-          +   '<div class="popup-title">' + it.sector + ' • ' + it.subestacion + '</div>'
-          +   '<div class="popup-meta">Circuito: <b>' + it.circuito + '</b> — <span style="color:' + col + '">' + it.tipo + '</span></div>'
-          +   '<div class="popup-meta">' + new Date(it.createdAt).toLocaleString() + '</div>'
-          +   '<div class="popup-meta">Inicio: ' + it.inicio.lat.toFixed(6) + ', ' + it.inicio.lng.toFixed(6) + '</div>'
-          +   '<div class="popup-meta">Final: ' + it.fin.lat.toFixed(6) + ', ' + it.fin.lng.toFixed(6) + '</div>'
-          +   (it.fotoInicio ? '<div style="margin-top:6px">Foto inicio:</div><img class="popup-img" src="' + it.fotoInicio + '"/>' : '')
-          +   (it.fotoFin ? '<div style="margin-top:6px">Foto final:</div><img class="popup-img" src="' + it.fotoFin + '"/>' : '')
-          + '</div>';
-        L.popup().setLatLng(mid).setContent(html).openOn(map);
-      });
-
-      if(fit){
-        var b = L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]);
-        map.fitBounds(b.pad(0.3));
-      }
-    }
-
-    function renderAll(){
-      clearMapLayers();
-      (state.items||[]).forEach(function(it){ drawItem(it, false); });
-    }
-
-    function clearWizard(resetAll){
-      if (typeof resetAll === "undefined") resetAll = true;
-      if(resetAll){
-        state.actual = { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicio:null, fotoFin:null };
-      } else {
-        state.actual.inicio = null; state.actual.fin = null; state.actual.fotoInicio = null; state.actual.fotoFin = null;
-      }
-      $("sector").value = ""; $("subestacion").value=""; $("circuito").value="";
-      $("tipo").value = "Apertura";
-      $("fotoInicio").value = ""; $("fotoFin").value = "";
-      $("previewInicioWrap").classList.add("hidden");
-      $("previewFinWrap").classList.add("hidden");
-      $("previewInicio").src = ""; $("previewFin").src = "";
-    }
-
-    function validateStep1(){
-      var sector = $("sector").value.trim();
-      var sub = $("subestacion").value.trim();
-      var circ = $("circuito").value.trim();
-      if(!sector || !sub || !circ) return false;
-      state.actual.sector = sector; state.actual.subestacion = sub; state.actual.circuito = circ;
-      state.actual.tipo = $("tipo").value;
-      return true;
-    }
-
-    async function validateStep2(){
-      if(!state.actual.inicio){
-        try { await capInicio(); } catch (e) {}
-      }
-      var f = $("fotoInicio").files[0];
-      if(!state.actual.inicio || !f) return false;
-      state.actual.fotoInicio = await compressImage(f, 1280, 1280, 0.72);
-      $("previewInicio").src = state.actual.fotoInicio; $("previewInicioWrap").classList.remove("hidden");
-      return true;
-    }
-
-    async function validateStep3(){
-      if(!state.actual.fin){
-        try { await capFin(); } catch (e) {}
-      }
-      var f = $("fotoFin").files[0];
-      if(!state.actual.fin || !f) return false;
-      state.actual.fotoFin = await compressImage(f, 1280, 1280, 0.72);
-      $("previewFin").src = state.actual.fotoFin; $("previewFinWrap").classList.remove("hidden");
-      return true;
-    }
-
-    function fillResumen(){
-      var it = state.actual;
-      var col = tipoColor(it.tipo);
-      $("resumen").innerHTML =
-        '<div class="grid">'
-        + '<div><b>Sector:</b> ' + it.sector + '</div>'
-        + '<div><b>Subestación:</b> ' + it.subestacion + '</div>'
-        + '<div><b>Circuito:</b> ' + it.circuito + '</div>'
-        + '<div><b>Tipo:</b> <span style="color:' + col + '">' + it.tipo + '</span></div>'
-        + '<div><b>Inicio:</b> ' + (it.inicio ? it.inicio.lat.toFixed(6)+', '+it.inicio.lng.toFixed(6) : '-') + '</div>'
-        + '<div><b>Final:</b> ' + (it.fin ? it.fin.lat.toFixed(6)+', '+it.fin.lng.toFixed(6) : '-') + '</div>'
-        + '<div><b>Foto inicio:</b></div>'
-        + (it.fotoInicio ? '<img class="preview" src="' + it.fotoInicio + '"/>' : '<div class="note">Sin foto</div>')
-        + '<div><b>Foto final:</b></div>'
-        + (it.fotoFin ? '<img class="preview" src="' + it.fotoFin + '"/>' : '<div class="note">Sin foto</div>')
-        + '</div>';
-    }
-
-    // ====== Capturas (con mejor UX y rapidez) ======
-    async function capInicio(){
-      showBlocker('Obteniendo GPS (inicio)…');
-      try{
-        const p = await getGPSFast();
-        state.actual.inicio = p;
-        if (state.mkInicioTemp) { try { map.removeLayer(state.mkInicioTemp); } catch(_){ /* ignore */ } }
-        const mk = L.marker([p.lat,p.lng], { title:"Inicio (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar inicio");
-        mk.on("dragend", function(e){
-          const ll = e.target.getLatLng();
-          state.actual.inicio = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
-        });
-        addLayer(mk);
-        state.mkInicioTemp = mk;
-        mk.openPopup();
-        toast('Punto inicial capturado.');
-      } finally { hideBlocker(); }
-    }
-
-    async function capFin(){
-      showBlocker('Obteniendo GPS (final)…');
-      try{
-        const p = await getGPSFast();
-        state.actual.fin = p;
-        if (state.mkFinTemp) { try { map.removeLayer(state.mkFinTemp); } catch(_){ /* ignore */ } }
-        const mk = L.marker([p.lat,p.lng], { title:"Final (ajustable)", draggable:true }).bindPopup("Arrastra para ajustar final");
-        mk.on("dragend", function(e){
-          const ll = e.target.getLatLng();
-          state.actual.fin = { lat: ll.lat, lng: ll.lng, ts: Date.now() };
-        });
-        addLayer(mk);
-        state.mkFinTemp = mk;
-        mk.openPopup();
-        toast('Punto final capturado.');
-      } finally { hideBlocker(); }
-    }
-
-    // ====== Guardado & Sync robusto ======
-    function safeSetLocal(key, value){
-      try{
-        localStorage.setItem(key, value);
-        return true;
-      }catch(e){
-        console.warn('No se pudo guardar en localStorage:', e);
-        toast('⚠️ Memoria local llena. Considera sincronizar pronto.');
-        return false;
-      }
-    }
-
-    async function fetchJSON(url, payload, opts){
-      const options = opts || {};
-      const timeoutMs = options.timeoutMs || 15000;
-      const retries = options.retries != null ? options.retries : 1;
-      const ctrl = new AbortController();
-      const t = setTimeout(function(){ try{ ctrl.abort(); }catch(_){ } }, timeoutMs);
-      try{
-        const res = await fetch(url, { ...payload, signal: ctrl.signal });
-        if(!res.ok) throw new Error('HTTP ' + res.status);
-        return await res.json();
-      }catch(e){
-        if(retries>0) return fetchJSON(url, payload, {timeoutMs:timeoutMs, retries:retries-1});
-        throw e;
-      }finally{ clearTimeout(t); }
-    }
-
-    async function syncToSheet(pendientes){
-      if(!APPS_SCRIPT_URL) return { ok:false, error:"Sin URL" };
-      const payload = { records: pendientes };
-      return await fetchJSON(APPS_SCRIPT_URL, {
-        method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload)
-      }, { timeoutMs: 20000, retries: 1 });
-    }
-
-    // ====== Eventos de UI ======
-    $("newTramo").onclick = function(){ openSheet(); setStep(1); };
-    $("s1-cancel").onclick = closeSheet;
-    $("s1-next").onclick = function(){
-      if(!validateStep1()){ toast("Completa Sector, Subestación y Circuito."); return; }
-      setStep(2);
-    };
-    $("s2-back").onclick = function(){ setStep(1); };
-    $("s2-next").onclick = async function(){
-      const ok = await validateStep2();
-      if(!ok){ toast("Captura el punto inicial y selecciona una foto."); return; }
-      setStep(3);
-    };
-    $("s3-back").onclick = function(){ setStep(2); };
-    $("s3-next").onclick = async function(){
-      const ok = await validateStep3();
-      if(!ok){ toast("Captura el punto final y selecciona una foto."); return; }
-      fillResumen();
-      setStep(4);
-    };
-    $("s4-cancel").onclick = function(){ closeSheet(); };
-
-    $("s4-save").onclick = async function(){
-      const btn = $("s4-save"); btn.disabled = true;
-
-      const it = {
-        id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(16).slice(2),
-        sector: state.actual.sector,
-        subestacion: state.actual.subestacion,
-        circuito: state.actual.circuito,
-        tipo: state.actual.tipo,
-        inicio: state.actual.inicio,
-        fin: state.actual.fin,
-        fotoInicio: state.actual.fotoInicio,
-        fotoFin: state.actual.fotoFin,
-        createdAt: new Date().toISOString(),
-        synced: false
-      };
-      state.items.push(it);
-      safeSetLocal("brechas_items", JSON.stringify(state.items));
-      drawItem(it, true);
-      closeSheet();
-      try{ if(state.mkInicioTemp){ map.removeLayer(state.mkInicioTemp); state.mkInicioTemp=null; } }catch(_){}
-      try{ if(state.mkFinTemp){ map.removeLayer(state.mkFinTemp); state.mkFinTemp=null; } }catch(_){}
-      renderAll();
-      updatePendingUI();
-
-      showBlocker('Guardando y sincronizando…');
-      let ok = false;
-      try {
-        const pendientes = state.items.filter(function(x){ return !x.synced; });
-        if (pendientes.length) {
-          const data = await syncToSheet(pendientes);
-          const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
-          const urlMap = data.urlMap || {};
-          state.items = state.items.map(function(x){
-            if (okIds.has(x.id)) {
-              const urls = urlMap[x.id] || {};
-              return Object.assign({}, x, { synced:true, fotoInicioUrl: urls.inicio || x.fotoInicioUrl || null, fotoFinUrl: urls.fin || x.fotoFinUrl || null });
-            }
-            return x;
-          });
-          safeSetLocal("brechas_items", JSON.stringify(state.items));
-          renderAll();
-          updatePendingUI();
-        }
-        ok = true;
-      } catch (e) {
-        console.warn("Autosync falló, queda pendiente:", e);
-      } finally {
-        hideBlocker();
-        toast(ok ? "Información guardada correctamente" : "Guardado local OK, sincronización pendiente.");
-        btn.disabled = false;
-      }
-    };
-
-    // Botones de captura
-    $("cap-inicio").onclick = capInicio;
-    $("cap-fin").onclick = capFin;
-
-    // Previews (ya comprimidos en validate*)
-    $("fotoInicio").addEventListener("change", async function(e){
-      if(e.target.files[0]){
-        const url = await compressImage(e.target.files[0], 960, 960, 0.7);
-        $("previewInicio").src = url; $("previewInicioWrap").classList.remove("hidden");
-      }
-    });
-    $("fotoFin").addEventListener("change", async function(e){
-      if(e.target.files[0]){
-        const url = await compressImage(e.target.files[0], 960, 960, 0.7);
-        $("previewFin").src = url; $("previewFinWrap").classList.remove("hidden");
-      }
-    });
-
-    window.syncBrechas = async function(){
-      const pendientes = (state.items||[]).filter(function(it){ return !it.synced; });
-      if(!pendientes.length){ toast("No hay reportes pendientes."); return; }
-      showBlocker('Sincronizando…');
-      try{
-        const data = await syncToSheet(pendientes);
-        const okIds = new Set([].concat(data.syncedIds || [], data.alreadySyncedIds || []));
-        const urlMap = data.urlMap || {};
-        state.items = state.items.map(function(it){
-          if(okIds.has(it.id)){
-            const urls = urlMap[it.id] || {};
-            return Object.assign({}, it, { synced:true, fotoInicioUrl: urls.inicio || it.fotoInicioUrl || null, fotoFinUrl: urls.fin || it.fotoFinUrl || null });
-          }
-          return it;
-        });
-        safeSetLocal("brechas_items", JSON.stringify(state.items));
-        renderAll();
-        updatePendingUI();
-        toast("✅ Sincronización completa");
-      } catch(e){ console.error(e); toast("❌ Error al sincronizar"); }
-      finally{ hideBlocker(); }
-    };
-
-    // Abrir previews en grande al tocar
-    document.addEventListener('click', function(e){
-      const el = e.target;
-      if (el && el.classList && el.classList.contains('preview')) {
-        try { window.open(el.src, '_blank'); } catch(_) {}
-      }
-    });
-
-    // === Pending sync UI helpers ===
-    function getPendingCount(){
-      try { return (state.items || []).filter(function(it){ return !it.synced; }).length; } catch (e) { return 0; }
-    }
-    function updatePendingUI(){
-      const n = getPendingCount();
-      const badge = document.getElementById("pendingBadge");
-      const banner = document.getElementById("pendingBanner");
-      const countEl = document.getElementById("pendingCount");
-      if(badge){
-        if(n>0){ badge.style.display='inline-block'; badge.textContent = n + ' pendiente(s)'; }
-        else { badge.style.display='none'; }
-      }
-      if(banner){
-        if(n>0){ banner.style.display='block'; if(countEl) countEl.textContent = n; }
-        else { banner.style.display='none'; }
-      }
-    }
-    const syncBtn = document.getElementById("syncBtn");
-    if(syncBtn){
-      syncBtn.addEventListener("click", async function(){
-        const n = getPendingCount();
-        if(n===0){ toast("No hay reportes pendientes."); return; }
-        await window.syncBrechas();
-      });
-    }
-
-    // ====== UI helpers ======
-    function toast(msg){
-      let t = document.getElementById('toast');
-      if(!t){ t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
-      t.textContent = msg;
-      t.style.display='block';
-      setTimeout(function(){ t.style.display='none'; }, 3000);
-    }
-    function showBlocker(text){
-      const el = document.getElementById('blocker');
-      const tx = document.getElementById('blockerText');
-      if(tx) tx.textContent = text || 'Sincronizando…';
-      if(el) el.style.display = 'flex';
-    }
-    function hideBlocker(){
-      const el = document.getElementById('blocker');
-      if(el) el.style.display = 'none';
-    }
-  </script>
-
-  <div id="blocker" class="blocker" aria-hidden="true">
-    <div class="box"><span class="spinner"></span><span id="blockerText">Guardando…</span></div>
+    <div id="step-4" class="grid hidden">
+      <div class="card grid">
+        <div><b>Resumen</b></div>
+        <div id="resumen"></div>
+        <div class="row">
+          <button id="s4-cancel" class="btn btn-ghost">Cancelar</button>
+          <button id="s4-save" class="btn btn-ok">Guardar tramo</button>
+        </div>
+      </div>
+    </div>
   </div>
+</section>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ==== Utilidades & Estado ====
+const $ = id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
+const state = { items:[], layers:[], actual:baseActual(), mkI:null, mkF:null, _objUrls:new Map(), _tapMode:null };
+function baseActual(){return { sector:'', subestacion:'', circuito:'', tipo:'Apertura', inicio:null, inicioStr:'', fin:null, finStr:'', fotoInicio:null, fotoInicioData:'', fotoFin:null, fotoFinData:'' };}
+let map, mapReady=false, pendingRender=false;
+
+function whenLeafletReady(cb){ if(window.L) return cb(); const iv=setInterval(()=>{ if(window.L){ clearInterval(iv); cb(); }},30); window.addEventListener('load', ()=>{ if(window.L){ clearInterval(iv); cb(); }}); }
+function initMap(){ if(map) return; map=L.map('map'); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000})} else { map.setView([14.0723,-87.1921],7) } map.on('click',onMapClick); mapReady=true; if(pendingRender){ pendingRender=false; renderAll(); } }
+whenLeafletReady(initMap);
+
+function onMapClick(e){
+  if(!state._tapMode) return;
+  const p = {lat:+e.latlng.lat, lng:+e.latlng.lng, ts:Date.now()};
+  if(state._tapMode==='inicio'){ setInicio(p,true); toast('Inicio fijado'); }
+  if(state._tapMode==='fin'){ setFin(p,true); toast('Final fijado'); }
+  state._tapMode=null;
+}
+function setInicio(p,fit){ state.actual.inicio=p; state.actual.inicioStr=`${p.lat},${p.lng}`; if(state.mkI){ try{ map.removeLayer(state.mkI) }catch(_){}} state.mkI=L.marker([p.lat,p.lng],{draggable:true}).addTo(map).bindPopup('Arrastra para ajustar inicio'); state.mkI.on('dragend',ev=>{const ll=ev.target.getLatLng(); state.actual.inicio={lat:+ll.lat,lng:+ll.lng,ts:Date.now()}; state.actual.inicioStr=`${+ll.lat},${+ll.lng}`;}); if(fit) map.setView([p.lat,p.lng],16); }
+function setFin(p,fit){ state.actual.fin=p; state.actual.finStr=`${p.lat},${p.lng}`; if(state.mkF){ try{ map.removeLayer(state.mkF) }catch(_){}} state.mkF=L.marker([p.lat,p.lng],{draggable:true}).addTo(map).bindPopup('Arrastra para ajustar final'); state.mkF.on('dragend',ev=>{const ll=ev.target.getLatLng(); state.actual.fin={lat:+ll.lat,lng:+ll.lng,ts:Date.now()}; state.actual.finStr=`${+ll.lat},${+ll.lng}`;}); if(fit) map.setView([p.lat,p.lng],16); }
+
+function hasPoint(p){ return p && typeof p.lat==='number' && !isNaN(p.lat) && typeof p.lng==='number' && !isNaN(p.lng); }
+function normPoint(p){ if(!p) return null; if(typeof p==='string'){ const a=p.split(',').map(Number); if(a.length===2 && !isNaN(a[0]) && !isNaN(a[1])) return {lat:a[0],lng:a[1]}; return null;} if(typeof p.lat==='number' && typeof p.lng==='number') return {lat:+p.lat,lng:+p.lng}; return null; }
+
+// ==== Fotos ====
+async function fileToDataURL(file){ return await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(fr.error); fr.onload=()=>res(fr.result); fr.readAsDataURL(file); }); }
+async function compressToBlob(file){ // simple, compatible
+  const dataUrl = await fileToDataURL(file);
+  // Creamos Blob a partir de dataURL (mantiene compatibilidad)
+  const arr = dataUrl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]); let n=bstr.length; const u8 = new Uint8Array(n); while(n--){u8[n]=bstr.charCodeAt(n);} return new Blob([u8],{type:mime});
+}
+function photoSrc(it,which){
+  const urlKey = which==='inicio'?'fotoInicioUrl':'fotoFinUrl';
+  const dataKey= which==='inicio'?'fotoInicioData':'fotoFinData';
+  const blobKey= which==='inicio'?'fotoInicio':'fotoFin';
+  if(it[urlKey]) return it[urlKey];
+  if(it[dataKey]) return it[dataKey];
+  const b = it[blobKey];
+  if(b && b instanceof Blob){
+    const key = it.id+':'+blobKey;
+    if(!state._objUrls.has(key)) state._objUrls.set(key, URL.createObjectURL(b));
+    return state._objUrls.get(key);
+  }
+  return '';
+}
+
+// ==== IndexedDB ====
+const DB='brechas-db', STORE='items', VER=2; let db;
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,VER); r.onupgradeneeded=e=>{const db=e.target.result; if(!db.objectStoreNames.contains(STORE)){const os=db.createObjectStore(STORE,{keyPath:'id'}); os.createIndex('synced','synced',{unique:false});}}; r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error);});}
+function idbAll(){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');const os=tx.objectStore(STORE);const rq=os.getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error);});}
+function idbPut(it){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.oncomplete=()=>res(true);tx.onerror=()=>rej(tx.error);tx.objectStore(STORE).put(it);});}
+
+// ==== Carga/Sincronización ====
+const APPS_SCRIPT_URL="/api/sync";
+async function fetchAll(){ try{ const r=await fetch(APPS_SCRIPT_URL+'?mode=all'); if(!r.ok) throw new Error(r.status); const data=await r.json(); return (data.records||[]).map(row=>({ id:row.id, sector:row.sector||'', subestacion:row.subestacion||'', circuito:row.circuito||'', tipo:row.tipo||'Apertura', inicio: normPoint(row.inicio), inicioStr: row.inicio||'', fin: normPoint(row.fin), finStr: row.fin||'', fotoInicioUrl: row.fotoInicioUrl||'', fotoFinUrl: row.fotoFinUrl||'', createdAt: row.createdAt||new Date().toISOString(), synced:true })); }catch(_){ return []; } }
+
+function markerPopupHtml(p,t,src,meta){ const coords = hasPoint(p) ? `Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}` : 'Coordenadas no válidas'; const img = src ? `<img class="popup-img" loading="lazy" src="${src}" alt="foto"/>` : '<div style="color:#8aa0b6">Sin foto</div>'; return `<div style="min-width:220px"><div style="font-weight:800">${t}</div><div style="color:#9fb3c7">${coords}</div><div style="color:#9fb3c7">${meta}</div>${img}</div>`; }
+function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
+function clearLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[]; }
+function drawItem(it,fit=false){ if(!hasPoint(it.inicio)||!hasPoint(it.fin)) return; const col=it.tipo==='Limpieza'?'#22c55e':'#f97316'; const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkI=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkF=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); mkI.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, photoSrc(it,'inicio'), `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkF.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, photoSrc(it,'fin'), `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkI); addLayer(mkF); if(fit){ const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3)); } }
+function renderAll(){ if(!map) return; clearLayers(); state.items.forEach(it=>drawItem(it,false)); }
+
+async function bootstrap(){ await idbOpen(); const local = await idbAll(); const server = await fetchAll(); const idsLocal=new Set(local.map(x=>x.id)); const merged=[...server, ...local.filter(x=>!x.synced), ...server.filter(x=>!idsLocal.has(x.id)&&x.synced)]; state.items = merged.map(it=>({ ...it, inicio: normPoint(it.inicio||it.inicioStr), fin: normPoint(it.fin||it.finStr) })); if(mapReady) renderAll(); $('pendingBadge').style.display = state.items.some(x=>!x.synced)?'inline-block':'none'; $('pendingBadge').textContent = state.items.filter(x=>!x.synced).length+' pendiente(s)'; }
+bootstrap();
+
+// ==== UI flujo ====
+function openSheet(){ $('sheet').classList.add('open'); }
+function closeSheet(){ $('sheet').classList.remove('open'); setStep(1); state.actual=baseActual(); if(state.mkI){try{map.removeLayer(state.mkI)}catch(_){}} if(state.mkF){try{map.removeLayer(state.mkF)}catch(_){}} }
+function show(id){ $(id).classList.remove('hidden'); } function hide(id){ $(id).classList.add('hidden'); }
+function setStep(n){ ['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n); }
+
+$('newTramo').onclick=()=>{ openSheet(); setStep(1); };
+$('s1-cancel').onclick=closeSheet;
+$('s1-next').onclick=()=>{
+  const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
+  if(!sector||!sub||!circ){ toast('Completa Sector, Subestación y Circuito'); return; }
+  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value});
+  setStep(2);
+};
+
+$('cap-inicio').onclick=()=>{
+  if(!navigator.geolocation){ toast('GPS no disponible'); return; }
+  navigator.geolocation.getCurrentPosition(p=>{ setInicio({lat:+p.coords.latitude,lng:+p.coords.longitude,ts:Date.now()}, true); }, _=>toast('No se pudo obtener GPS'), {enableHighAccuracy:true,timeout:12000,maximumAge:0});
+};
+$('cap-inicio-tap').onclick=()=>{ state._tapMode='inicio'; toast('Toca el mapa para fijar INICIO'); };
+
+$('s2-back').onclick=()=>setStep(1);
+$('s2-next').onclick=async ()=>{
+  if(!hasPoint(state.actual.inicio)){ toast('Fija el punto INICIO (GPS o tocando mapa)'); return; }
+  const f=$('fotoInicio').files[0]; if(!f){ toast('Selecciona la foto de inicio'); return; }
+  try{ state.actual.fotoInicio = await compressToBlob(f); state.actual.fotoInicioData = await fileToDataURL(f); $('previewInicio').src = state.actual.fotoInicioData; $('previewInicioWrap').classList.remove('hidden'); }catch(_){ toast('No se pudo procesar la foto de inicio'); return; }
+  setStep(3);
+};
+
+$('cap-fin').onclick=()=>{
+  if(!navigator.geolocation){ toast('GPS no disponible'); return; }
+  navigator.geolocation.getCurrentPosition(p=>{ setFin({lat:+p.coords.latitude,lng:+p.coords.longitude,ts:Date.now()}, true); }, _=>toast('No se pudo obtener GPS'), {enableHighAccuracy:true,timeout:12000,maximumAge:0});
+};
+$('cap-fin-tap').onclick=()=>{ state._tapMode='fin'; toast('Toca el mapa para fijar FINAL'); };
+
+$('s3-back').onclick=()=>setStep(2);
+$('s3-next').onclick=async ()=>{
+  if(!hasPoint(state.actual.fin)){ toast('Fija el punto FINAL (GPS o tocando mapa)'); return; }
+  const f=$('fotoFin').files[0]; if(!f){ toast('Selecciona la foto final'); return; }
+  try{ state.actual.fotoFin = await compressToBlob(f); state.actual.fotoFinData = await fileToDataURL(f); $('previewFin').src = state.actual.fotoFinData; $('previewFinWrap').classList.remove('hidden'); }catch(_){ toast('No se pudo procesar la foto final'); return; }
+  const it=state.actual; const col=it.tipo==='Limpieza'?'#22c55e':'#f97316';
+  $('resumen').innerHTML = `<div class="grid">
+    <div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div>
+    <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
+    <div><b>Inicio:</b> ${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}</div>
+    <div><b>Final:</b> ${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}</div>
+  </div>`;
+  setStep(4);
+};
+
+$('s4-cancel').onclick=closeSheet;
+$('s4-save').onclick=async ()=>{
+  if(!hasPoint(state.actual.inicio) || !hasPoint(state.actual.fin)){ toast('Faltan coordenadas válidas'); return; }
+  const it={ id:crypto.randomUUID(), ...state.actual, createdAt:new Date().toISOString(), synced:false };
+  state.items.push(it);
+  await idbPut(it);
+  drawItem({ ...it }, true);
+  $('pendingBadge').style.display='inline-block'; $('pendingBadge').textContent = state.items.filter(x=>!x.synced).length+' pendiente(s)';
+  toast('Guardado local');
+  closeSheet();
+};
+
+// No implementamos sync real aquí; el popup usará fotoInicioData/fotoFinData inmediatamente.
+$('syncBtn').onclick=()=>toast('Demo: implementa tu endpoint en /api/sync');
+
+</script>
 </body>
 </html>
