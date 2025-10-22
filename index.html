@@ -1,642 +1,239 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <link rel="icon" href="data:,"/>
-  <title>Captura de Brechas — Versión Limpia</title>
+// ===== CONFIG =====
+var SHEET_ID   = '1K22CCUhfzU7pvM9nUHEt6oYPn6LRQ24X0FMBBIfzc0k';
+var SHEET_NAME = 'Hoja 1';            // hoja donde se guardan los tramos
+var FOLDER_ID  = '150Lz2UP2muETfRA_KYhbAG7xRy7Nz2hb'; // carpeta para fotos
+var SHEET_CATALOG_NAME = 'Hoja 2';    // hoja con SUBESTACION | SECTOR | CIRCUITO
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-.btn:disabled{opacity:.75;cursor:not-allowed}
-
-    
-/* --- Spinner en botones --- */
-.btn.loading { position: relative; pointer-events: none; opacity: .85; }
-.btn .spinner {
-  display: inline-block; width: 1em; height: 1em; vertical-align: -2px;
-  border: .18em solid currentColor; border-right-color: transparent; border-radius: 50%;
-  margin-right: .5em; animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-:root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;background:var(--bg);color:var(--text);overflow:hidden;-webkit-tap-highlight-color:transparent}
-    header{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:10px;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:12px 14px}
-    header h1{margin:0;font-size:16px} header .muted{color:var(--muted);font-size:12px}
-    #map{position:absolute;inset:52px 0 0 0;touch-action:manipulation}
-    .fab{position:fixed;right:16px;bottom:16px;z-index:1100;border:0;border-radius:999px;background:var(--accent);color:#051423;padding:14px 16px;font-weight:800;box-shadow:var(--shadow)} .fab:active{transform:translateY(1px)}
-    .sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:2000;background:var(--sheet);border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid var(--border);box-shadow:0 -12px 30px rgba(0,0,0,.45);transition:bottom .28s ease;max-height:82vh;display:flex;flex-direction:column}
-    .sheet.open{bottom:0} .sheet .drag{width:56px;height:5px;border-radius:999px;background:#24314f;margin:8px auto} .sheet .content{padding:12px;overflow:auto}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px} .field{display:flex;flex-direction:column;gap:6px} label{font-size:12px;color:var(--muted)}
-    input[type="text"],select,input[type="file"]{width:100%;background:#0e1729;color:var(--text);border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px}
-    .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#183055;color:#e6f0ff;width:100%;font-weight:700} .btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff} .btn-danger{background:var(--danger)} .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
-    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
-    img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
-    .popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
-    .blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:var(--shadow);text-align:center;font-weight:600}
-    .spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
-    .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Captura de Brechas</h1>
-    <span class="muted">Móvil • GPS • Fotos (Drive)</span>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Actualizar</button>
-    </div>
-  </header>
-
-  <div id="map"></div>
-
-  <button id="newTramo" class="fab">+ Nuevo tramo</button>
-
-  <section id="sheet" class="sheet" aria-modal="true" role="dialog">
-    <div class="drag"></div>
-    <div class="content">
-      <div id="step-1" class="grid">
-        <div class="card">
-          <div class="chips" style="margin-bottom:8px">
-            <span class="chip"><span class="color-box apertura"></span>Apertura</span>
-            <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Sector</label>
-              <input id="sector" type="text" placeholder="Ej: Norte" autocomplete="off"/>
-            </div>
-            <div class="field">
-              <label>Subestación</label>
-              <input id="subestacion" type="text" placeholder="Ej: S/E Progreso" autocomplete="off"/>
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Circuito</label>
-              <input id="circuito" type="text" placeholder="Ej: CIR-123" autocomplete="off"/>
-            </div>
-            <div class="field">
-              <label>Tipo de brecha</label>
-              <select id="tipo">
-                <option value="Apertura">Apertura de brecha</option>
-                <option value="Limpieza">Limpieza de brecha</option>
-              </select>
-            </div>
-          </div>
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
-          <div class="bar" style="margin-top:10px">
-            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s1-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="step-2" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto obligatoria</u>.</div>
-          <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
-          <div class="field">
-            <label>Foto punto inicial (requerida)</label>
-            <input id="fotoInicio" type="file" accept="image/*" capture="environment"/>
-          </div>
-          <div id="previewInicioWrap" class="hidden">
-            <img id="previewInicio" class="preview" alt="Foto inicio"/>
-          </div>
-          <div class="bar">
-            <button id="s2-back" class="btn btn-ghost">Atrás</button>
-            <button id="s2-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="step-3" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto obligatoria</u>.</div>
-          <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
-          <div class="field">
-            <label>Foto punto final (requerida)</label>
-            <input id="fotoFin" type="file" accept="image/*" capture="environment"/>
-          </div>
-          <div id="previewFinWrap" class="hidden">
-            <img id="previewFin" class="preview" alt="Foto final"/>
-          </div>
-          <div class="bar">
-            <button id="s3-back" class="btn btn-ghost">Atrás</button>
-            <button id="s3-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="step-4" class="grid hidden">
-        <div class="card grid">
-          <div><strong>Resumen</strong> — revisa y guarda.</div>
-          <div id="resumen" class="grid"></div>
-          <div class="bar">
-            <button id="s4-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s4-save" class="btn btn-ok">Guardar tramo</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div id="blocker" class="blocker" aria-hidden="true"><div class="box"><span class="spinner"></span><span id="blockerText">Procesando…</span></div></div>
-  <div id="toast" class="toast"></div>
-
-<script>
-// -------- Config --------
-const APPS_SCRIPT_URL = "/api/sync";  // tu proxy a Apps Script
-const IMG_MAX = 1280;
-const IMG_QUALITY = 0.82;
-
-// -------- Utilidad UI --------
-const $ = (id)=>document.getElementById(id);
-function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
-function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
-function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
-function hideBlocker(){$('blocker').style.display='none'}
-
-// -------- Estado --------
-let map, tiles, mapReady=false, pendingRender=false;
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
-function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
-let step=1; const sheet=$('sheet');
-function openSheet(){sheet.classList.add('open');}
-function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false); clearTempMarkers();}
-function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
-
-// -------- Imagen: compresión a JPEG --------
-async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
-async function imageToBlob(file){
-  const bmp = await readImageBitmap(file);
-  const ratio = Math.min(1, IMG_MAX/Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * ratio), h = Math.round(bmp.height * ratio);
-  let canvas;
-  if (typeof OffscreenCanvas !== 'undefined'){
-    canvas = new OffscreenCanvas(w, h);
-  } else {
-    canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
+// ===== HELPERS =====
+function ensureSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow([
+      'SECTOR','SUBESTACION','CIRCUITO','TIPO BRECHA',
+      'PUNTO INICIAL','PUNTO FINAL',
+      'FOTO INICIO URL','FOTO FIN URL',
+      'CREATED_AT','ID'
+    ]);
   }
-  const ctx = canvas.getContext('2d', { alpha: false });
-  ctx.drawImage(bmp, 0, 0, w, h);
-  async function toBlob(c, t, q){
-    if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
-    return await new Promise(r => c.toBlob(r, t, q));
-  }
-  return await toBlob(canvas, 'image/jpeg', IMG_QUALITY);
-}
-function blobUrl(b){return URL.createObjectURL(b)}
-async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
-
-// -------- GPS --------
-function getGPS(){return new Promise((res,rej)=>{ if(!navigator.geolocation) return rej(new Error('Geolocalización no disponible')); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()}), err=>rej(err), {enableHighAccuracy:true, timeout:10000, maximumAge:0}); });}
-
-// -------- Mapa --------
-function whenLeafletReady(cb){
-  if (window.L) return cb();
-  const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
-  window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
-}
-function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
-whenLeafletReady(()=>{ initMapOnce(); });
-
-// -------- Server I/O --------
-async function fetchAllFromServer(){
-  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all';
-  const r=await fetch(url,{method:'GET'});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const data=await r.json();
-  const rows=Array.isArray(data.records)?data.records:[];
-  return rows.map(r=>{
-    const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number);
-    const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null;
-    const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null;
-    return {
-      id:r.id,
-      sector:r.sector||'',
-      subestacion:r.subestacion||'',
-      circuito:r.circuito||'',
-      tipo:r.tipo||'Apertura',
-      inicio:ini,
-      fin:fin,
-      fotoInicioUrl:r.fotoInicioUrl||'',
-      fotoFinUrl:r.fotoFinUrl||'',
-      createdAt:r.createdAt||new Date().toISOString()
-    };
-  });
+  return sh;
 }
 
-async function syncOneToServer(it){
-  const payload = { records: [it] };
-  const r = await fetch(APPS_SCRIPT_URL, {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)
-  });
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return await r.json();
+/**
+ * Guarda una imagen base64 en Drive y devuelve su URL publica embebible (uc?export=view&id=).
+ */
+function saveImageToDrive_(base64, filename) {
+  if (!base64) return '';
+  var parts = String(base64).split(',');
+  var data = parts.length > 1 ? parts[1] : parts[0];
+  var bytes = Utilities.base64Decode(data);
+
+  var contentType = 'image/jpeg';
+  if (parts[0] && parts[0].indexOf('image/png') !== -1) contentType = 'image/png';
+
+  var blob = Utilities.newBlob(bytes, contentType, filename);
+  var folder = DriveApp.getFolderById(FOLDER_ID);
+  var file = folder.createFile(blob);
+
+  // Compartir por enlace (si el dominio lo permite)
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+
+  // Igual devolvemos la URL uc por compatibilidad
+  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
 }
 
+function jsonOut_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
-function toProxyImg(u){
-  if (!u) return '';
-  try {
-    const s = String(u).trim();
-    // id directo
-    if (/^[\w-]{20,}$/.test(s)) return `${APPS_SCRIPT_URL}?mode=img&id=${s}`;
-    // /file/d/<ID>/...
-    let m = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
-    // ...?id=<ID>
-    m = s.match(/[?&]id=([^&]+)/i);
-    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
-    // uc?export=view&id=...
-    if (/drive\.google\.com\/uc\?/.test(s)) {
-      const mid = s.match(/[?&]id=([^&]+)/i);
-      if (mid && mid[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${mid[1]}`;
+/**
+ * Lee todas las filas y devuelve un arreglo de objetos.
+ * Coordenadas como "lat,lng" para payload mas chico.
+ */
+function readAllRecords_() {
+  var sh = ensureSheet_();
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+
+  var COL_SECTOR = 1, COL_SUB = 2, COL_CIRC = 3, COL_TIPO = 4,
+      COL_PINI = 5, COL_PFIN = 6, COL_FINI = 7, COL_FFIN = 8,
+      COL_CREATED = 9, COL_ID = 10;
+
+  var records = [];
+  if (lastRow >= 2) {
+    var rows = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      records.push({
+        sector: String(r[COL_SECTOR - 1] || ''),
+        subestacion: String(r[COL_SUB - 1] || ''),
+        circuito: String(r[COL_CIRC - 1] || ''),
+        tipo: String(r[COL_TIPO - 1] || ''),
+        inicio: String(r[COL_PINI - 1] || ''),
+        fin: String(r[COL_PFIN - 1] || ''),
+        fotoInicioUrl: String(r[COL_FINI - 1] || ''),
+        fotoFinUrl: String(r[COL_FFIN - 1] || ''),
+        createdAt: String(r[COL_CREATED - 1] || ''),
+        id: String(r[COL_ID - 1] || '')
+      });
     }
-    // otros orígenes
-    if (/^https?:\/\//i.test(s)) return s;
-    return s;
-  } catch { return u; }
-}
-// -------- Render --------
-function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
-function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
-function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
-
-
-function getPhotoSrcFromUrls(it, which){
-  const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
-  const u = it[key];
-  if (typeof u === 'string' && u.trim()) return toProxyImg(u.trim());
-  return '';
+  }
+  return records;
 }
 
-function markerPopupHtml(p,t,src,m){
-  const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
-  const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
-  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`;
-}
+// ===== CATÁLOGO DESDE "Hoja 2" =====
+/**
+ * Lee Hoja 2 en formato columnas: A=SUBESTACION, B=SECTOR, C=CIRCUITO (con encabezados).
+ * Devuelve { sectors: string[], bySector: {sector: string[]}, bySubestacion: {sub: string[]} }.
+ */
+function readCatalog_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(SHEET_CATALOG_NAME);
+  if (!sh) return { sectors: [], bySector: {}, bySubestacion: {} };
 
-function drawItem(it,fit=false){
-  if(!(it && it.inicio && it.fin)) return;
-  const col=tipoColor(it.tipo);
-  const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
-  const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const fIni = getPhotoSrcFromUrls(it,'inicio'); 
-  const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
-  addLayer(line); addLayer(mkIni); addLayer(mkFin);
-  if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
-}
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 3) return { sectors: [], bySector: {}, bySubestacion: {} };
 
-function renderAllIncremental(){
-  if(!map) return;
-  clearMapLayers();
-  const items=[...state.items];
-  let i=0;
-  function chunk(){
-    const start=performance.now();
-    while(i<items.length && (performance.now()-start)<8){
-      drawItem(items[i++], false);
+  // Tomamos todo (asumimos encabezados en la fila 1)
+  var values = sh.getRange(1, 1, lastRow, 3).getValues();
+
+  var sectorsSet = {};
+  var bySector = {};         // sector -> [subestaciones]
+  var bySubestacion = {};    // subestacion -> [circuitos]
+
+  for (var i = 1; i < values.length; i++) { // desde la fila 2
+    var sub = String(values[i][0] || '').trim(); // A
+    var sec = String(values[i][1] || '').trim(); // B
+    var cir = String(values[i][2] || '').trim(); // C
+    if (!sec && !sub && !cir) continue;
+
+    if (sec) sectorsSet[sec] = true;
+
+    if (sec && sub) {
+      if (!bySector[sec]) bySector[sec] = [];
+      if (bySector[sec].indexOf(sub) === -1) bySector[sec].push(sub);
     }
-    if(i<items.length) requestIdleCallback(chunk,{timeout:60});
-  }
-  requestIdleCallback(chunk,{timeout:60});
-}
 
-// -------- Wizard --------
-function clearWizard(resetAll=true){
-  if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicioFile=null;state.actual.fotoFinFile=null}
-  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura';
-  $('fotoInicio').value='';$('fotoFin').value='';
-  $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
-  $('previewInicio').src='';$('previewFin').src='';
-}
-function validateStep1(){
-  const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
-  if(!sector||!sub||!circ) return false;
-  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value});
-  return true;
-}
-async function validateStep2(){
-  if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
-  const f=$('fotoInicio').files[0];
-  if(!state.actual.inicio||!f) return false;
-  state.actual.fotoInicioFile=f;
-  const b=await imageToBlob(f);
-  $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
-  return true;
-}
-async function validateStep3(){
-  if(!state.actual.fin){try{await capFin()}catch(_){}} 
-  const f=$('fotoFin').files[0];
-  if(!state.actual.fin||!f) return false;
-  state.actual.fotoFinFile=f;
-  const b=await imageToBlob(f);
-  $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
-  return true;
-}
-function fillResumen(){
-  const it=state.actual, col=tipoColor(it.tipo);
-  const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
-  const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
-  $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
-}
-
-// -------- Captura de puntos --------
-async function capInicio(){
-  const p=await getGPS(); state.actual.inicio=p;
-  if(state.mkInicioTemp){ try{ map && map.removeLayer(state.mkInicioTemp); }catch(_){ } }
-  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio');
-  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
-  addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup();
-}
-async function capFin(){
-  const p=await getGPS(); state.actual.fin=p;
-  if(state.mkFinTemp){ try{ map && map.removeLayer(state.mkFinTemp); }catch(_){ } }
-  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final');
-  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
-  addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup();
-}
-function clearTempMarkers(){
-  try { if(state.mkInicioTemp){ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); state.mkInicioTemp=null; } } catch(_){}
-  try { if(state.mkFinTemp){ state.mkFinTemp.remove && state.mkFinTemp.remove(); state.mkFinTemp=null; } } catch(_){}
-}
-
-
-// Wire buttons for GPS capture
-
-// --- Helper: loading spinner en botones ---
-function setBtnLoading(btn, loading, label){
-  if(!btn) return;
-  if(loading){
-    btn.dataset._label = btn.dataset._label || btn.textContent;
-    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
-    btn.classList.add('loading');
-    btn.disabled = true;
-  } else {
-    const original = btn.dataset._label || btn.textContent;
-    btn.textContent = original;
-    btn.classList.remove('loading');
-    btn.disabled = false;
-  }
-}
-
-
-// -------- Guardado --------
-document.getElementById('s4-save').onclick = async ()=>{
-  if (!(state.actual.inicio && state.actual.fin)){
-    toast('Faltan coordenadas válidas de inicio/fin.'); return;
-  }
-  showBlocker('Guardando…');
-
-  try {
-    // Convertimos a dataURL para POST (server guardará en Drive y devolverá URL)
-    const fotoInicioBlob = await imageToBlob(state.actual.fotoInicioFile);
-    const fotoFinBlob   = await imageToBlob(state.actual.fotoFinFile);
-    const fotoInicioB64 = await blobToDataURL(fotoInicioBlob);
-    const fotoFinB64    = await blobToDataURL(fotoFinBlob);
-
-    const it = {
-      id: crypto.randomUUID(),
-      sector: state.actual.sector,
-      subestacion: state.actual.subestacion,
-      circuito: state.actual.circuito,
-      tipo: state.actual.tipo,
-      inicio: state.actual.inicio,
-      fin: state.actual.fin,
-      fotoInicio: fotoInicioB64,
-      fotoFin: fotoFinB64,
-      createdAt: new Date().toISOString()
-    };
-
-    const resp = await syncOneToServer(it);
-    const okIds = new Set([...(resp.syncedIds||[]), ...(resp.alreadySyncedIds||[])]);
-    const urlMap = resp.urlMap || {};
-
-    if (okIds.has(it.id)) {
-      // Reemplaza campos de fotos por URLs (Drive)
-      it.fotoInicioUrl = (urlMap[it.id]||{}).inicio || '';
-      it.fotoFinUrl = (urlMap[it.id]||{}).fin || '';
-      // Limpia blobs locales
-      delete it.fotoInicio; delete it.fotoFin;
-      delete it.fotoInicioFile; delete it.fotoFinFile;
-
-      state.items.push(it);
-      drawItem(it, true);
-      clearTempMarkers();
-      closeSheet();
-      toast('✅ Guardado en servidor');
-    } else {
-      toast('❌ No se guardó en servidor');
+    if (sub && cir) {
+      if (!bySubestacion[sub]) bySubestacion[sub] = [];
+      if (bySubestacion[sub].indexOf(cir) === -1) bySubestacion[sub].push(cir);
     }
-  } catch (e) {
-    console.warn(e);
-    toast('❌ Error al guardar');
-  } finally {
-    hideBlocker();
   }
-};
 
-// -------- Eventos UI --------
-$('newTramo').onclick=()=>{openSheet(); setStep(1)};
-$('s1-cancel').onclick=closeSheet;
-$('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
-$('s2-back').onclick=()=>setStep(1);
-$('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); };
-$('s3-back').onclick=()=>setStep(2);
-$('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
+  var sectors = Object.keys(sectorsSet).sort();
+  Object.keys(bySector).forEach(function(k){ bySector[k].sort(); });
+  Object.keys(bySubestacion).forEach(function(k){ bySubestacion[k].sort(); });
 
-$('fotoInicio').addEventListener('change', async e=>{
-  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); }
-});
-$('fotoFin').addEventListener('change', async e=>{
-  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); }
-});
+  return { sectors: sectors, bySector: bySector, bySubestacion: bySubestacion };
+}
 
-$('syncBtn').addEventListener('click', async ()=>{
-  showBlocker('Actualizando…');
+// ===== ENDPOINTS =====
+function doGet(e) {
   try {
-    state.items = (await fetchAllFromServer());
-    if (mapReady) renderAllIncremental();
-    toast('✅ Datos actualizados');
-  } catch (e) {
-    console.warn(e); toast('❌ Error al actualizar');
-  } finally {
-    hideBlocker();
-  }
-});
+    var mode = e && e.parameter && e.parameter.mode;
 
-// -------- Bootstrap --------
-(async function bootstrap(){
-  showBlocker('Cargando datos…');
+    // Devolver todos los registros
+    if (mode === 'all') {
+      var records = readAllRecords_();
+      return jsonOut_({ ok: true, records: records });
+    }
+
+    // Devolver catálogo para selects (Hoja 2)
+    if (mode === 'options') {
+      var cat = readCatalog_();
+      return jsonOut_({ ok: true, sectors: cat.sectors, bySector: cat.bySector, bySubestacion: cat.bySubestacion, updatedAt: new Date().toISOString() });
+    }
+
+    // Ping por defecto
+    return jsonOut_({ ok: true, ping: 'pong', when: new Date().toISOString() });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
+}
+
+function doPost(e) {
   try {
-    state.items = (await fetchAllFromServer());
-  } catch (e) {
-    console.warn(e);
-    state.items = [];
-    toast('⚠️ Error al conectar con el servidor');
-  } finally {
-    hideBlocker();
-    if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
-  }
-})();
-</script>
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    var body = JSON.parse(raw);
+    var records = Object.prototype.toString.call(body.records) === '[object Array]' ? body.records : [];
 
-<!-- === Inyecciones de robustez (polyfills y overrides de imagen) === -->
-<script>
-// Polyfill requestIdleCallback / cancelIdleCallback
-window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) {
-  const start = Date.now();
-  return setTimeout(function () {
-    cb({
-      didTimeout: false,
-      timeRemaining: function () {
-        return Math.max(0, 50 - (Date.now() - start));
+    var sh = ensureSheet_();
+    var lastRow = sh.getLastRow();
+    var lastCol = sh.getLastColumn();
+
+    var COL_SECTOR = 1, COL_SUB = 2, COL_CIRC = 3, COL_TIPO = 4,
+        COL_PINI = 5, COL_PFIN = 6, COL_FINI = 7, COL_FFIN = 8,
+        COL_CREATED = 9, COL_ID = 10;
+
+    // Mapear IDs existentes
+    var idMap = {}; // id -> row
+    if (lastRow >= 2) {
+      var existing = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      for (var i = 0; i < existing.length; i++) {
+        var rowIndex = i + 2;
+        var id = String(existing[i][COL_ID - 1] || '').trim();
+        if (id) idMap[id] = rowIndex;
       }
-    });
-  }, (opts && opts.timeout) || 1);
-};
-window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
+    }
 
-// Fallback para crypto.randomUUID
-if (!window.crypto) { window.crypto = {}; }
-if (!crypto.randomUUID) {
-  crypto.randomUUID = function () {
-    const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
-    return tpl.replace(/[xy]/g, function(c){
-      let r;
-      if (window.crypto && crypto.getRandomValues) {
-        r = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
+    var syncedIds = [];
+    var alreadySyncedIds = [];
+    var urlMap = {}; // id -> {inicio, fin}
+    var rowsToAppend = [];
+
+    for (var j = 0; j < records.length; j++) {
+      var r = records[j];
+      var idr = r.id || Utilities.getUuid();
+      var existsRow = idMap[idr] || 0;
+
+      var pIni = r.inicio ? (r.inicio.lat + ',' + r.inicio.lng) : '';
+      var pFin = r.fin ? (r.fin.lat + ',' + r.fin.lng) : '';
+
+      var fotoIniUrl = '';
+      var fotoFinUrl = '';
+
+      if (r.fotoInicio) fotoIniUrl = saveImageToDrive_(r.fotoInicio, idr + '_inicio.jpg');
+      if (r.fotoFin)    fotoFinUrl = saveImageToDrive_(r.fotoFin, idr + '_fin.jpg');
+
+      if (existsRow) {
+        // Actualiza las fotos si llegaron nuevas
+        if (fotoIniUrl) sh.getRange(existsRow, COL_FINI).setValue(fotoIniUrl);
+        if (fotoFinUrl) sh.getRange(existsRow, COL_FFIN).setValue(fotoFinUrl);
+
+        // Mantiene URLs anteriores si no llegaron nuevas
+        if (!fotoIniUrl) fotoIniUrl = String(sh.getRange(existsRow, COL_FINI).getValue() || '');
+        if (!fotoFinUrl) fotoFinUrl = String(sh.getRange(existsRow, COL_FFIN).getValue() || '');
+
+        // No tocamos otras columnas en update parcial
+        urlMap[idr] = { inicio: fotoIniUrl, fin: fotoFinUrl };
+        alreadySyncedIds.push(idr);
       } else {
-        r = Math.floor(Math.random() * 16);
+        rowsToAppend.push([
+          r.sector || '',
+          r.subestacion || '',
+          r.circuito || '',
+          r.tipo || '',
+          pIni,
+          pFin,
+          fotoIniUrl,
+          fotoFinUrl,
+          r.createdAt || new Date().toISOString(),
+          idr
+        ]);
+        urlMap[idr] = { inicio: fotoIniUrl, fin: fotoFinUrl };
+        syncedIds.push(idr);
       }
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
-}
-
-// Helper: lee imagen como ImageBitmap si existe, o como Image con dataURL
-async function readImageBitmap(file){
-  if (window.createImageBitmap) {
-    try {
-      return await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch (e) {}
-  }
-  const dataURL = await new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result);
-    fr.onerror = rej;
-    fr.readAsDataURL(file);
-  });
-  const img = await new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = rej;
-    i.src = dataURL;
-  });
-  // objeto compatible con drawImage
-  return { width: img.width, height: img.height, _img: img };
-}
-
-// Override no disruptivo: redefine imageToBlob con fallbacks (la definición posterior prevalece)
-async function imageToBlob(file){
-  try {
-    // Variables globales esperadas por el proyecto
-    const MAX = typeof IMG_MAX !== 'undefined' ? IMG_MAX : 1920;
-    const Q = typeof IMG_QUALITY !== 'undefined' ? IMG_QUALITY : 0.85;
-
-    const bmp = await readImageBitmap(file);
-    const srcW = bmp.width, srcH = bmp.height;
-    const scale = Math.min(1, MAX / Math.max(srcW, srcH));
-    const w = Math.round(srcW * scale);
-    const h = Math.round(srcH * scale);
-
-    let canvas;
-    if (typeof OffscreenCanvas !== 'undefined'){
-      canvas = new OffscreenCanvas(w, h);
-    } else {
-      canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
     }
-    const ctx = canvas.getContext('2d', { alpha: false });
-    ctx.drawImage(bmp._img ? bmp._img : bmp, 0, 0, w, h);
 
-    async function toBlob(c, t, q){
-      if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
-      return await new Promise(r => c.toBlob(r, t, q));
+    if (rowsToAppend.length) {
+      sh.getRange(sh.getLastRow() + 1, 1, rowsToAppend.length, lastCol).setValues(rowsToAppend);
     }
-    return await toBlob(canvas, 'image/jpeg', Q);
-  } catch (e) {
-    // Último recurso: devolver el archivo original
-    return file;
+
+    return jsonOut_({ ok: true, syncedIds: syncedIds, alreadySyncedIds: alreadySyncedIds, urlMap: urlMap });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
   }
 }
-</script>
-
-<script>
-// Inicializa handlers cuando el DOM está listo
-document.addEventListener('DOMContentLoaded', () => {
-  function setBtnLoading(btn, loading, label){
-    if(!btn) return;
-    if(loading){
-      btn.dataset._label = btn.dataset._label || btn.textContent;
-      btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
-      btn.classList.add('loading');
-      btn.disabled = true;
-    } else {
-      const original = btn.dataset._label || btn.textContent;
-      btn.textContent = original;
-      btn.classList.remove('loading');
-      btn.disabled = false;
-    }
-  }
-
-  const capIniBtn = document.getElementById('cap-inicio');
-  if (capIniBtn) {
-    capIniBtn.onclick = async () => {
-      setBtnLoading(capIniBtn, true, 'Capturando coordenadas…');
-      try {
-        await capInicio();
-        toast('Punto inicial capturado');
-      } catch (e) {
-        console.warn(e);
-        toast('No se pudo obtener GPS');
-      } finally {
-        setBtnLoading(capIniBtn, false);
-      }
-    };
-  }
-
-  const capFinBtn = document.getElementById('cap-fin');
-  if (capFinBtn) {
-    capFinBtn.onclick = async () => {
-      setBtnLoading(capFinBtn, true, 'Capturando coordenadas…');
-      try {
-        await capFin();
-        toast('Punto final capturado');
-      } catch (e) {
-        console.warn(e);
-        toast('No se pudo obtener GPS');
-      } finally {
-        setBtnLoading(capFinBtn, false);
-      }
-    };
-  }
-});
-</script>
-</body>
-</html>
