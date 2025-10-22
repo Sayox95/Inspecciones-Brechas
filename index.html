@@ -11,6 +11,8 @@
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
+.btn:disabled{opacity:.75;cursor:not-allowed}
+
     
 /* --- Spinner en botones --- */
 .btn.loading { position: relative; pointer-events: none; opacity: .85; }
@@ -392,8 +394,6 @@ function setBtnLoading(btn, loading, label){
   }
 }
 
-$('#cap-inicio').onclick = async ()=>{ const btn=$('cap-inicio'); setBtnLoading(btn,true,'Capturando…'); try{ await capInicio(); toast('Punto inicial capturado'); } catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } finally { setBtnLoading(btn,false); } };
-$('#cap-fin').onclick    = async ()=>{ const btn=$('cap-fin'); setBtnLoading(btn,true,'Capturando…'); try{ await capFin(); toast('Punto final capturado'); } catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } finally { setBtnLoading(btn,false); } };
 
 // -------- Guardado --------
 document.getElementById('s4-save').onclick = async ()=>{
@@ -585,6 +585,58 @@ async function imageToBlob(file){
     return file;
   }
 }
+</script>
+
+<script>
+// Inicializa handlers cuando el DOM está listo
+document.addEventListener('DOMContentLoaded', () => {
+  function setBtnLoading(btn, loading, label){
+    if(!btn) return;
+    if(loading){
+      btn.dataset._label = btn.dataset._label || btn.textContent;
+      btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
+      btn.classList.add('loading');
+      btn.disabled = true;
+    } else {
+      const original = btn.dataset._label || btn.textContent;
+      btn.textContent = original;
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  const capIniBtn = document.getElementById('cap-inicio');
+  if (capIniBtn) {
+    capIniBtn.onclick = async () => {
+      setBtnLoading(capIniBtn, true, 'Capturando coordenadas…');
+      try {
+        await capInicio();
+        toast('Punto inicial capturado');
+      } catch (e) {
+        console.warn(e);
+        toast('No se pudo obtener GPS');
+      } finally {
+        setBtnLoading(capIniBtn, false);
+      }
+    };
+  }
+
+  const capFinBtn = document.getElementById('cap-fin');
+  if (capFinBtn) {
+    capFinBtn.onclick = async () => {
+      setBtnLoading(capFinBtn, true, 'Capturando coordenadas…');
+      try {
+        await capFin();
+        toast('Punto final capturado');
+      } catch (e) {
+        console.warn(e);
+        toast('No se pudo obtener GPS');
+      } finally {
+        setBtnLoading(capFinBtn, false);
+      }
+    };
+  }
+});
 </script>
 </body>
 </html>
