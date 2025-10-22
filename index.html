@@ -270,16 +270,31 @@ function hasValidPoint(p){return !!(p && typeof p.lat==='number' && !isNaN(p.lat
 
 function toEmbeddableImageUrl(u){
   if (!u) return '';
-  try{
-    const url = String(u);
-    // Pattern 1: /file/d/<ID>/view
+  try {
+    const url = String(u).trim();
+
+    // 1) Already a data URL
+    if (url.startsWith('data:image')) return url;
+
+    // 2) Already an embeddable Drive URL
+    if (/drive\.google\.com\/uc\?/.test(url)) return url;
+
+    // 3) Pattern: /file/d/<ID>/view[?...]
     let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
     if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
-    // Pattern 2: ...open?id=<ID> or .../uc?export=download&id=<ID>
+
+    // 4) Pattern: ...open?id=<ID> OR ...uc?export=download&id=<ID>
     m = url.match(/[?&]id=([^&]+)/i);
-    if (m && m[1] && /drive\.google\.com/i.test(url)) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+
+    // 5) For non-Drive http(s) URLs, use as-is (CDN/S3/etc.)
+    if (/^https?:\/\//i.test(url)) return url;
+
+    // 6) Fallback: return unchanged
     return url;
-  }catch(_){ return u; }
+  } catch (_) {
+    return u;
+  }
 }
 function getPhotoSrc(it, which){
   const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
