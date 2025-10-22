@@ -284,7 +284,7 @@ function getPhotoSrcFromUrls(it, which){
 function markerPopupHtml(p,t,src,m,id){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
   const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
-  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${id}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${id}">🗑️ Eliminar</button></div>`:'';
+  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">🗑️ Eliminar</button></div>`:'';
   return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
 }
 
@@ -801,29 +801,50 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
 <script>
 // Delegación global: maneja clics en botones dentro de popups aunque el mapa aún no exista
+
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('.leaflet-popup [data-act]');
   if (!btn) return;
   const act = btn.getAttribute('data-act');
-  const id  = btn.getAttribute('data-id');
-  if (!act || !id) return;
+  let id  = (btn.getAttribute('data-id') || '').trim();
+  const lat = parseFloat(btn.getAttribute('data-lat')||'');
+  const lng = parseFloat(btn.getAttribute('data-lng')||'');
 
-  // Evita clics repetidos
+  // resolver item con varias estrategias
+  function resolveItem(){
+    if (window.state && Array.isArray(state.items)) {
+      if (id) {
+        const exact = state.items.find(x => (String(x.id||'').trim() === id));
+        if (exact) return exact;
+      }
+      if (!isNaN(lat) && !isNaN(lng)) {
+        const eps = 1e-7;
+        const byIni = state.items.find(x => x.inicio && Math.abs(x.inicio.lat - lat) < eps && Math.abs(x.inicio.lng - lng) < eps);
+        if (byIni) return byIni;
+        const byFin = state.items.find(x => x.fin && Math.abs(x.fin.lat - lat) < eps && Math.abs(x.fin.lng - lng) < eps);
+        if (byFin) return byFin;
+      }
+    }
+    return null;
+  }
+
+  if (!act) return;
   if (btn.dataset.loading === '1') return;
   btn.dataset.loading = '1';
   const original = btn.textContent;
 
   try {
+    const it = resolveItem();
     if (act === 'edit') {
-      const it = (window.state && Array.isArray(state.items)) ? state.items.find(x => x.id === id) : null;
       if (!it) { alert('No se encontró el tramo para editar.'); return; }
+      if (!id && it.id) { id = it.id; btn.setAttribute('data-id', String(it.id)); }
       btn.textContent = 'Abriendo…';
       if (typeof startEdit === 'function') startEdit(it);
     } else if (act === 'delete') {
       if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
       btn.textContent = 'Eliminando…';
       if (typeof deleteById === 'function') {
-        await deleteById(id);
+        await deleteById(id || (it && it.id));
       }
     }
   } catch (e) {
@@ -835,6 +856,7 @@ document.addEventListener('click', async (ev) => {
   }
 });
 </script>
+
 
 <script>
 let _catalogLoaded = false;
