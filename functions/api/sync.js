@@ -1,145 +1,827 @@
-// functions/api/sync.js
-export async function onRequestOptions({ request }) {
-  const origin = request.headers.get('Origin') || '*';
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Range',
-      'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-      'Vary': 'Origin'
-    }
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <link rel="icon" href="data:,"/>
+  <title>Captura de Brechas — Versión Limpia</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+.btn:disabled{opacity:.75;cursor:not-allowed}
+
+    
+/* --- Spinner en botones --- */
+.btn.loading { position: relative; pointer-events: none; opacity: .85; }
+.btn .spinner {
+  display: inline-block; width: 1em; height: 1em; vertical-align: -2px;
+  border: .18em solid currentColor; border-right-color: transparent; border-radius: 50%;
+  margin-right: .5em; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+:root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;background:var(--bg);color:var(--text);overflow:hidden;-webkit-tap-highlight-color:transparent}
+    header{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:10px;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:12px 14px}
+    header h1{margin:0;font-size:16px} header .muted{color:var(--muted);font-size:12px}
+    #map{position:absolute;inset:52px 0 0 0;touch-action:manipulation}
+    .fab{position:fixed;right:16px;bottom:16px;z-index:1100;border:0;border-radius:999px;background:var(--accent);color:#051423;padding:14px 16px;font-weight:800;box-shadow:var(--shadow)} .fab:active{transform:translateY(1px)}
+    .sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:2000;background:var(--sheet);border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid var(--border);box-shadow:0 -12px 30px rgba(0,0,0,.45);transition:bottom .28s ease;max-height:82vh;display:flex;flex-direction:column}
+    .sheet.open{bottom:0} .sheet .drag{width:56px;height:5px;border-radius:999px;background:#24314f;margin:8px auto} .sheet .content{padding:12px;overflow:auto}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px} .field{display:flex;flex-direction:column;gap:6px} label{font-size:12px;color:var(--muted)}
+    input[type="text"],select,input[type="file"]{width:100%;background:#0e1729;color:var(--text);border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px}
+    .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#183055;color:#e6f0ff;width:100%;font-weight:700} .btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff} .btn-danger{background:var(--danger)} .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
+    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
+    img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
+    .popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
+    .blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:var(--shadow);text-align:center;font-weight:600}
+    .spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
+    .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Captura de Brechas</h1>
+    <span class="muted">Móvil • GPS • Fotos (Drive)</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Actualizar</button>
+    </div>
+  </header>
+
+  <div id="map"></div>
+
+  <button id="newTramo" class="fab">+ Nuevo tramo</button>
+
+  <section id="sheet" class="sheet" aria-modal="true" role="dialog">
+    <div class="drag"></div>
+    <div class="content">
+      <div id="step-1" class="grid">
+        <div class="card">
+          <div class="chips" style="margin-bottom:8px">
+            <span class="chip"><span class="color-box apertura"></span>Apertura</span>
+            <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Sector</label>
+              <select id="sector" disabled><option value="">Cargando sectores…</option></select>
+            </div>
+            <div class="field">
+              <label>Subestación</label>
+              <select id="subestacion" disabled><option value="">Selecciona un sector…</option></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Circuito</label>
+              <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
+            </div>
+            <div class="field">
+              <label>Tipo de brecha</label>
+              <select id="tipo">
+                <option value="Apertura">Apertura de brecha</option>
+                <option value="Limpieza">Limpieza de brecha</option>
+              </select>
+            </div>
+          </div>
+          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
+          <div class="bar" style="margin-top:10px">
+            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
+            <button id="s1-next" class="btn btn-primary">Siguiente</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-2" class="grid hidden">
+        <div class="card grid">
+          <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto opcional</u>.</div>
+          <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
+          <div class="field">
+            <label>Foto punto inicial (opcional)</label>
+            <input id="fotoInicio" type="file" accept="image/*" capture="environment"/>
+          </div>
+          <div id="previewInicioWrap" class="hidden">
+            <img id="previewInicio" class="preview" alt="Foto inicio"/>
+          </div>
+          <div class="bar">
+            <button id="s2-back" class="btn btn-ghost">Atrás</button>
+            <button id="s2-next" class="btn btn-primary">Siguiente</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-3" class="grid hidden">
+        <div class="card grid">
+          <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto opcional</u>.</div>
+          <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
+          <div class="field">
+            <label>Foto punto final (opcional)</label>
+            <input id="fotoFin" type="file" accept="image/*" capture="environment"/>
+          </div>
+          <div id="previewFinWrap" class="hidden">
+            <img id="previewFin" class="preview" alt="Foto final"/>
+          </div>
+          <div class="bar">
+            <button id="s3-back" class="btn btn-ghost">Atrás</button>
+            <button id="s3-next" class="btn btn-primary">Siguiente</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-4" class="grid hidden">
+        <div class="card grid">
+          <div><strong>Resumen</strong> — revisa y guarda.</div>
+          <div id="resumen" class="grid"></div>
+          <div class="bar">
+            <button id="s4-cancel" class="btn btn-ghost">Cancelar</button>
+            <button id="s4-save" class="btn btn-ok">Guardar tramo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="blocker" class="blocker" aria-hidden="true"><div class="box"><span class="spinner"></span><span id="blockerText">Procesando…</span></div></div>
+  <div id="toast" class="toast"></div>
+
+<script>
+// -------- Config --------
+const APPS_SCRIPT_URL = "/api/sync";  // tu proxy a Apps Script
+const IMG_MAX = 1280;
+const IMG_QUALITY = 0.82;
+
+// -------- Utilidad UI --------
+const $ = (id)=>document.getElementById(id);
+function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
+function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
+function hideBlocker(){$('blocker').style.display='none'}
+
+// -------- Estado --------
+let map, tiles, mapReady=false, pendingRender=false;
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
+function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
+let step=1; const sheet=$('sheet');
+function openSheet(){sheet.classList.add('open');}
+function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false); clearTempMarkers();}
+function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
+
+// -------- Imagen: compresión a JPEG --------
+async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
+async function imageToBlob(file){
+  const bmp = await readImageBitmap(file);
+  const ratio = Math.min(1, IMG_MAX/Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * ratio), h = Math.round(bmp.height * ratio);
+  let canvas;
+  if (typeof OffscreenCanvas !== 'undefined'){
+    canvas = new OffscreenCanvas(w, h);
+  } else {
+    canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+  }
+  const ctx = canvas.getContext('2d', { alpha: false });
+  ctx.drawImage(bmp, 0, 0, w, h);
+  async function toBlob(c, t, q){
+    if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
+    return await new Promise(r => c.toBlob(r, t, q));
+  }
+  return await toBlob(canvas, 'image/jpeg', IMG_QUALITY);
+}
+function blobUrl(b){return URL.createObjectURL(b)}
+async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
+
+// -------- GPS --------
+function getGPS(){return new Promise((res,rej)=>{ if(!navigator.geolocation) return rej(new Error('Geolocalización no disponible')); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()}), err=>rej(err), {enableHighAccuracy:true, timeout:10000, maximumAge:0}); });}
+
+// -------- Mapa --------
+function whenLeafletReady(cb){
+  if (window.L) return cb();
+  const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
+  window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
+}
+function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
+whenLeafletReady(()=>{ initMapOnce(); });
+
+// -------- Server I/O --------
+async function fetchAllFromServer(){
+  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all';
+  const r=await fetch(url,{method:'GET'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  const rows=Array.isArray(data.records)?data.records:[];
+  return rows.map(r=>{
+    const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number);
+    const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null;
+    const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null;
+    return {
+      id:r.id,
+      sector:r.sector||'',
+      subestacion:r.subestacion||'',
+      circuito:r.circuito||'',
+      tipo:r.tipo||'Apertura',
+      inicio:ini,
+      fin:fin,
+      fotoInicioUrl:r.fotoInicioUrl||'',
+      fotoFinUrl:r.fotoFinUrl||'',
+      createdAt:r.createdAt||new Date().toISOString()
+    };
   });
 }
 
-function getUpstream(env) {
-  // Usa tu var de entorno si la tienes (rename si prefieres)
-  return env?.APPS_SCRIPT_POST_URL
-    || 'https://script.google.com/macros/s/AKfycbyl7Ony5vOZ7fZVmv0-GCqHnXWuTTSaJMvCXpY5CavtuIG-7DoRHNJinc8HWqWqEExHQQ/exec';
+async function syncOneToServer(it){
+  const payload = { records: [it] };
+  const r = await fetch(APPS_SCRIPT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
 }
 
-export async function onRequestGet({ request, env }) {
-  const origin = request.headers.get('Origin') || '*';
 
+function toProxyImg(u){
+  if (!u) return '';
   try {
-    const url = new URL(request.url);
-    const mode = url.searchParams.get('mode');
-    const id   = url.searchParams.get('id');
-
-    // ===== Proxy directo de imagen (evita CORS y binarios de GAS) =====
-    if (mode === 'img' && id) {
-      const driveUrl = `https://drive.google.com/uc?export=view&id=${encodeURIComponent(id)}`;
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45000);
-
-      const resp = await fetch(driveUrl, { signal: controller.signal });
-
-      clearTimeout(timer);
-
-      const ct = resp.headers.get('content-type') || 'application/octet-stream';
-      return new Response(resp.body, {
-        status: resp.status,
-        headers: {
-          'Access-Control-Allow-Origin': origin,
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Range',
-          'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-          'Vary': 'Origin',
-          'Content-Type': ct,
-          'Cache-Control': 'no-store'
-        }
-      });
+    const s = String(u).trim();
+    // id directo
+    if (/^[\w-]{20,}$/.test(s)) return `${APPS_SCRIPT_URL}?mode=img&id=${s}`;
+    // /file/d/<ID>/...
+    let m = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
+    // ...?id=<ID>
+    m = s.match(/[?&]id=([^&]+)/i);
+    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
+    // uc?export=view&id=...
+    if (/drive\.google\.com\/uc\?/.test(s)) {
+      const mid = s.match(/[?&]id=([^&]+)/i);
+      if (mid && mid[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${mid[1]}`;
     }
+    // otros orígenes
+    if (/^https?:\/\//i.test(s)) return s;
+    return s;
+  } catch { return u; }
+}
+// -------- Render --------
+function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
+function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
+function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 
-    // ===== Proxy normal hacia Apps Script =====
-    const upstream = getUpstream(env);
-    const qs = url.search || '';
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45000);
+function getPhotoSrcFromUrls(it, which){
+  const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
+  const u = it[key];
+  if (typeof u === 'string' && u.trim()) return toProxyImg(u.trim());
+  return '';
+}
 
-    const resp = await fetch(upstream + qs, { method: 'GET', signal: controller.signal });
+function markerPopupHtml(p,t,src,m,id){
+  const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
+  const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
+  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${id}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${id}">🗑️ Eliminar</button></div>`:'';
+  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
+}
 
-    clearTimeout(timer);
+function drawItem(it,fit=false){
+  if(!(it && it.inicio && it.fin)) return;
+  const col=tipoColor(it.tipo);
+  const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
+  const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
+  const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
+  const fIni = getPhotoSrcFromUrls(it,'inicio'); 
+  const fFin = getPhotoSrcFromUrls(it,'fin'); 
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
+  addLayer(line); addLayer(mkIni); addLayer(mkFin);
+  if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
+}
 
-    // Reenvía en streaming para soportar binarios (no usar .text())
-    const ct = resp.headers.get('content-type') || 'application/octet-stream';
-    return new Response(resp.body, {
-      status: resp.status,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
-        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-        'Vary': 'Origin',
-        'Content-Type': ct,
-        'Cache-Control': 'no-store'
-      }
-    });
-  } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: 'No se pudo obtener datos (GET)' }), {
-      status: 502,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
-        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-        'Vary': 'Origin',
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
-    });
+function renderAllIncremental(){
+  if(!map) return;
+  clearMapLayers();
+  const items=[...state.items];
+  let i=0;
+  function chunk(){
+    const start=performance.now();
+    while(i<items.length && (performance.now()-start)<8){
+      drawItem(items[i++], false);
+    }
+    if(i<items.length) requestIdleCallback(chunk,{timeout:60});
+  }
+  requestIdleCallback(chunk,{timeout:60});
+}
+
+// -------- Wizard --------
+function clearWizard(resetAll=true){
+  if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicioFile=null;state.actual.fotoFinFile=null}
+  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura';
+  $('fotoInicio').value='';$('fotoFin').value='';
+  $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
+  $('previewInicio').src='';$('previewFin').src='';
+}
+function validateStep1(){
+  const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
+  if(!sector||!sub||!circ) return false;
+  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value});
+  return true;
+}
+async function validateStep2(){
+  if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
+  const f=$('fotoInicio').files[0];
+  if(!state.actual.inicio||!f) return false;
+  state.actual.fotoInicioFile=f;
+  const b=await imageToBlob(f);
+  $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+  return true;
+}
+async function validateStep3(){
+  if(!state.actual.fin){try{await capFin()}catch(_){}} 
+  const f=$('fotoFin').files[0];
+  if(!state.actual.fin||!f) return false;
+  state.actual.fotoFinFile=f;
+  const b=await imageToBlob(f);
+  $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+  return true;
+}
+function fillResumen(){
+  const it=state.actual, col=tipoColor(it.tipo);
+  const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
+  const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
+  $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
+}
+
+// -------- Captura de puntos --------
+async function capInicio(){
+  const p=await getGPS(); state.actual.inicio=p;
+  if(state.mkInicioTemp){ try{ map && map.removeLayer(state.mkInicioTemp); }catch(_){ } }
+  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio');
+  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
+  addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup();
+}
+async function capFin(){
+  const p=await getGPS(); state.actual.fin=p;
+  if(state.mkFinTemp){ try{ map && map.removeLayer(state.mkFinTemp); }catch(_){ } }
+  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final');
+  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
+  addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup();
+}
+function clearTempMarkers(){
+  try { if(state.mkInicioTemp){ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); state.mkInicioTemp=null; } } catch(_){}
+  try { if(state.mkFinTemp){ state.mkFinTemp.remove && state.mkFinTemp.remove(); state.mkFinTemp=null; } } catch(_){}
+}
+
+
+// Wire buttons for GPS capture
+
+// --- Helper: loading spinner en botones ---
+function setBtnLoading(btn, loading, label){
+  if(!btn) return;
+  if(loading){
+    btn.dataset._label = btn.dataset._label || btn.textContent;
+    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
+    btn.classList.add('loading');
+    btn.disabled = true;
+  } else {
+    const original = btn.dataset._label || btn.textContent;
+    btn.textContent = original;
+    btn.classList.remove('loading');
+    btn.disabled = false;
   }
 }
 
-export async function onRequestPost({ request, env }) {
-  const origin = request.headers.get('Origin') || '*';
-  const upstream = getUpstream(env);
+
+
+// --- Edición y borrado desde popups ---
+function startEdit(it){
+  openSheet(); setStep(1);
+  // Pre-carga selects y tipo
+  $('sector').value = it.sector || '';
+  $('subestacion').value = it.subestacion || '';
+  $('circuito').value = it.circuito || '';
+  $('tipo').value = it.tipo || 'Apertura';
+  state.actual = JSON.parse(JSON.stringify(it)); // clona para edición
+
+  // Previews según URLs (si existen)
+  if (it.fotoInicioUrl) { $('previewInicio').src = toProxyImg(it.fotoInicioUrl); $('previewInicioWrap').classList.remove('hidden'); }
+  else { $('previewInicio').src=''; $('previewInicioWrap').classList.add('hidden'); }
+  if (it.fotoFinUrl) { $('previewFin').src = toProxyImg(it.fotoFinUrl); $('previewFinWrap').classList.remove('hidden'); }
+  else { $('previewFin').src=''; $('previewFinWrap').classList.add('hidden'); }
+}
+
+async function deleteById(id){
+  const r = await fetch(APPS_SCRIPT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ op:'delete', id })
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const data = await r.json();
+  if (!data.ok) throw new Error(data.error||'delete failed');
+  // quitar del estado y re-render
+  state.items = state.items.filter(x=>x.id!==id);
+  clearMapLayers(); renderAllIncremental();
+}
+
+// Delegación de clics en popup
+if (map) {
+  map.on('popupopen', (e)=>{
+    const root = e.popup.getElement();
+    if (!root) return;
+    const onClick = async (ev)=>{
+      const btn = ev.target.closest('[data-act]');
+      if(!btn) return;
+      const act = btn.getAttribute('data-act');
+      const id  = btn.getAttribute('data-id');
+      if (act === 'edit') {
+        const it = state.items.find(x=>x.id===id);
+        if (it) startEdit(it);
+      } else if (act === 'delete') {
+        if (confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')){
+          try{ await deleteById(id); toast('Tramo eliminado'); } catch(e){ console.warn(e); toast('No se pudo eliminar'); }
+        }
+      }
+    };
+    root.addEventListener('click', onClick, { once:false });
+  });
+}
+
+// -------- Guardado --------
+document.getElementById('s4-save').onclick = async ()=>{
+  if (!(state.actual.inicio && state.actual.fin)){
+    toast('Faltan coordenadas válidas de inicio/fin.'); return;
+  }
+  showBlocker('Guardando…');
 
   try {
-    // Leemos como texto para no romper base64
-    const bodyText = await request.text();
+    // Convertimos a dataURL para POST (server guardará en Drive y devolverá URL)
+    const fotoInicioB64 = state.actual.fotoInicioFile ? await blobToDataURL(await imageToBlob(state.actual.fotoInicioFile)) : '';
+const fotoFinB64    = state.actual.fotoFinFile   ? await blobToDataURL(await imageToBlob(state.actual.fotoFinFile))   : '';
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45000);
+    const it = {
+      id: (state.actual.id || (crypto.randomUUID && crypto.randomUUID()) || String(Date.now())),
+      sector: state.actual.sector,
+      subestacion: state.actual.subestacion,
+      circuito: state.actual.circuito,
+      tipo: state.actual.tipo,
+      inicio: state.actual.inicio,
+      fin: state.actual.fin,
+      fotoInicio: fotoInicioB64,
+      fotoFin: fotoFinB64,
+      createdAt: new Date().toISOString()
+    };
 
-    const upstreamResp = await fetch(upstream, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: bodyText,
-      signal: controller.signal
-    });
+    const resp = await syncOneToServer(it);
+    const okIds = new Set([...(resp.syncedIds||[]), ...(resp.alreadySyncedIds||[])]);
+    const urlMap = resp.urlMap || {};
 
-    clearTimeout(timer);
+    if (okIds.has(it.id)) {
+      // Reemplaza campos de fotos por URLs (Drive)
+      it.fotoInicioUrl = (urlMap[it.id]||{}).inicio || '';
+      it.fotoFinUrl = (urlMap[it.id]||{}).fin || '';
+      // Limpia blobs locales
+      delete it.fotoInicio; delete it.fotoFin;
+      delete it.fotoInicioFile; delete it.fotoFinFile;
 
-    // Devuelve stream del upstream (no convertir a .text())
-    const ct = upstreamResp.headers.get('content-type') || 'application/json';
-    return new Response(upstreamResp.body, {
-      status: upstreamResp.status,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
-        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-        'Vary': 'Origin',
-        'Content-Type': ct,
-        'Cache-Control': 'no-store'
-      }
-    });
+      const idx = state.items.findIndex(x=>x.id===it.id);
+      if (idx>=0){ state.items[idx]=it; clearMapLayers(); renderAllIncremental(); }
+      else { state.items.push(it); drawItem(it, true); }
+      clearTempMarkers();
+      closeSheet();
+      toast('✅ Guardado en servidor');
+    } else {
+      toast('❌ No se guardó en servidor');
+    }
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: 'No se pudo conectar con Apps Script' }), {
-      status: 502,
-      headers: {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
-        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
-        'Vary': 'Origin',
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
+    console.warn(e);
+    toast('❌ Error al guardar');
+  } finally {
+    hideBlocker();
+  }
+};
+
+// -------- Eventos UI --------
+$('newTramo').onclick=()=>{openSheet(); setStep(1)};
+$('s1-cancel').onclick=closeSheet;
+$('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
+$('s2-back').onclick=()=>setStep(1);
+$('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial. (La foto es opcional)'); return;} setStep(3); };
+$('s3-back').onclick=()=>setStep(2);
+$('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final. (La foto es opcional)'); return;} fillResumen(); setStep(4); };
+
+$('fotoInicio').addEventListener('change', async e=>{
+  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); }
+});
+$('fotoFin').addEventListener('change', async e=>{
+  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); }
+});
+
+$('syncBtn').addEventListener('click', async ()=>{
+  showBlocker('Actualizando…');
+  try {
+    state.items = (await fetchAllFromServer());
+    if (mapReady) renderAllIncremental();
+    toast('✅ Datos actualizados');
+  } catch (e) {
+    console.warn(e); toast('❌ Error al actualizar');
+  } finally {
+    hideBlocker();
+  }
+});
+
+// -------- Bootstrap --------
+(async function bootstrap(){
+  showBlocker('Cargando datos…');
+  try {
+    state.items = (await fetchAllFromServer());
+  } catch (e) {
+    console.warn(e);
+    state.items = [];
+    toast('⚠️ Error al conectar con el servidor');
+  } finally {
+    hideBlocker();
+    if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
+  }
+})();
+</script>
+
+<!-- === Inyecciones de robustez (polyfills y overrides de imagen) === -->
+<script>
+// Polyfill requestIdleCallback / cancelIdleCallback
+window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) {
+  const start = Date.now();
+  return setTimeout(function () {
+    cb({
+      didTimeout: false,
+      timeRemaining: function () {
+        return Math.max(0, 50 - (Date.now() - start));
       }
     });
+  }, (opts && opts.timeout) || 1);
+};
+window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
+
+// Fallback para crypto.randomUUID
+if (!window.crypto) { window.crypto = {}; }
+if (!crypto.randomUUID) {
+  crypto.randomUUID = function () {
+    const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+    return tpl.replace(/[xy]/g, function(c){
+      let r;
+      if (window.crypto && crypto.getRandomValues) {
+        r = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
+      } else {
+        r = Math.floor(Math.random() * 16);
+      }
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+}
+
+// Helper: lee imagen como ImageBitmap si existe, o como Image con dataURL
+async function readImageBitmap(file){
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {}
+  }
+  const dataURL = await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = dataURL;
+  });
+  // objeto compatible con drawImage
+  return { width: img.width, height: img.height, _img: img };
+}
+
+// Override no disruptivo: redefine imageToBlob con fallbacks (la definición posterior prevalece)
+async function imageToBlob(file){
+  try {
+    // Variables globales esperadas por el proyecto
+    const MAX = typeof IMG_MAX !== 'undefined' ? IMG_MAX : 1920;
+    const Q = typeof IMG_QUALITY !== 'undefined' ? IMG_QUALITY : 0.85;
+
+    const bmp = await readImageBitmap(file);
+    const srcW = bmp.width, srcH = bmp.height;
+    const scale = Math.min(1, MAX / Math.max(srcW, srcH));
+    const w = Math.round(srcW * scale);
+    const h = Math.round(srcH * scale);
+
+    let canvas;
+    if (typeof OffscreenCanvas !== 'undefined'){
+      canvas = new OffscreenCanvas(w, h);
+    } else {
+      canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+    }
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(bmp._img ? bmp._img : bmp, 0, 0, w, h);
+
+    async function toBlob(c, t, q){
+      if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
+      return await new Promise(r => c.toBlob(r, t, q));
+    }
+    return await toBlob(canvas, 'image/jpeg', Q);
+  } catch (e) {
+    // Último recurso: devolver el archivo original
+    return file;
   }
 }
+</script>
+
+<script>
+// Inicializa handlers cuando el DOM está listo
+document.addEventListener('DOMContentLoaded', () => {
+  function setBtnLoading(btn, loading, label){
+    if(!btn) return;
+    if(loading){
+      btn.dataset._label = btn.dataset._label || btn.textContent;
+      btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
+      btn.classList.add('loading');
+      btn.disabled = true;
+    } else {
+      const original = btn.dataset._label || btn.textContent;
+      btn.textContent = original;
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  const capIniBtn = document.getElementById('cap-inicio');
+  if (capIniBtn) {
+    capIniBtn.onclick = async () => {
+      setBtnLoading(capIniBtn, true, 'Capturando coordenadas…');
+      try {
+        await capInicio();
+        toast('Punto inicial capturado');
+      } catch (e) {
+        console.warn(e);
+        toast('No se pudo obtener GPS');
+      } finally {
+        setBtnLoading(capIniBtn, false);
+      }
+    };
+  }
+
+  const capFinBtn = document.getElementById('cap-fin');
+  if (capFinBtn) {
+    capFinBtn.onclick = async () => {
+      setBtnLoading(capFinBtn, true, 'Capturando coordenadas…');
+      try {
+        await capFin();
+        toast('Punto final capturado');
+      } catch (e) {
+        console.warn(e);
+        toast('No se pudo obtener GPS');
+      } finally {
+        setBtnLoading(capFinBtn, false);
+      }
+    };
+  }
+});
+</script>
+<script>
+
+// ===== Opciones de catálogo (Sector / Subestación / Circuito) =====
+let catalog = { sectors: [], bySector: {}, bySubestacion: {} };
+
+function setSelectOptions(sel, arr, placeholder){
+  sel.innerHTML = '';
+  if (placeholder) {
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = placeholder;
+    sel.appendChild(opt);
+  }
+  for (const v of arr){
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    sel.appendChild(o);
+  }
+}
+
+async function loadCatalog(){
+  try{
+    const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'mode=options';
+    const r = await fetch(url, { method: 'GET' });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    if (!data || !data.ok) throw new Error('Respuesta inválida');
+    catalog.sectors = data.sectors || [];
+    catalog.bySector = data.bySector || {};
+    catalog.bySubestacion = data.bySubestacion || {};
+  }catch(e){
+    console.warn('No se pudo cargar catálogo', e);
+    catalog = { sectors: [], bySector: {}, bySubestacion: {} };
+  }
+}
+
+function initCascadingSelects(){
+  const selSector = document.getElementById('sector');
+  const selSub = document.getElementById('subestacion');
+  const selCirc = document.getElementById('circuito');
+
+  // Inicial: sectores
+  setSelectOptions(selSector, catalog.sectors, 'Selecciona un sector…');
+  selSector.disabled = false;
+
+  // Listeners
+  selSector.onchange = ()=>{
+    const sec = selSector.value;
+    const subs = (catalog.bySector[sec] || []);
+    setSelectOptions(selSub, subs, subs.length ? 'Selecciona una subestación…' : 'Sin subestaciones');
+    selSub.disabled = subs.length === 0;
+    // Reset circuito
+    setSelectOptions(selCirc, [], 'Selecciona una subestación…');
+    selCirc.disabled = true;
+    // Actualiza estado
+    state.actual.sector = sec || '';
+    state.actual.subestacion = '';
+    state.actual.circuito = '';
+  };
+
+  selSub.onchange = ()=>{
+    const sub = selSub.value;
+    const circs = (catalog.bySubestacion[sub] || []);
+    setSelectOptions(selCirc, circs, circs.length ? 'Selecciona un circuito…' : 'Sin circuitos');
+    selCirc.disabled = circs.length === 0;
+    state.actual.subestacion = sub || '';
+    state.actual.circuito = '';
+  };
+
+  selCirc.onchange = ()=>{
+    state.actual.circuito = selCirc.value || '';
+  };
+
+  // Preseleccionar si viene de un registro previo
+  if (state.actual.sector){
+    selSector.value = state.actual.sector;
+    selSector.onchange();
+    if (state.actual.subestacion){
+      selSub.value = state.actual.subestacion;
+      selSub.onchange();
+      if (state.actual.circuito){
+        selCirc.value = state.actual.circuito;
+      }
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Carga catálogo y configura selects
+  await loadCatalog();
+  initCascadingSelects();
+});
+
+</script>
+
+<script>
+// Delegación global: maneja clics en botones dentro de popups aunque el mapa aún no exista
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('.leaflet-popup [data-act]');
+  if (!btn) return;
+  const act = btn.getAttribute('data-act');
+  const id  = btn.getAttribute('data-id');
+  if (!act || !id) return;
+
+  // Evita clics repetidos
+  if (btn.dataset.loading === '1') return;
+  btn.dataset.loading = '1';
+  const original = btn.textContent;
+
+  try {
+    if (act === 'edit') {
+      const it = (window.state && Array.isArray(state.items)) ? state.items.find(x => x.id === id) : null;
+      if (!it) { alert('No se encontró el tramo para editar.'); return; }
+      btn.textContent = 'Abriendo…';
+      if (typeof startEdit === 'function') startEdit(it);
+    } else if (act === 'delete') {
+      if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
+      btn.textContent = 'Eliminando…';
+      if (typeof deleteById === 'function') {
+        await deleteById(id);
+      }
+    }
+  } catch (e) {
+    console.warn(e);
+    alert('Ocurrió un error al procesar la acción.');
+  } finally {
+    btn.textContent = original;
+    btn.dataset.loading = '';
+  }
+});
+</script>
+</body>
+</html>
