@@ -157,8 +157,6 @@ const IMG_MAX = 1280;
 const IMG_QUALITY = 0.82;
 
 // -------- Utilidad UI --------
-// Fallback para pruebas locales: si no está definida la URL del Apps Script, usa vacío
-if (typeof window.APPS_SCRIPT_URL === 'undefined') { window.APPS_SCRIPT_URL = ''; }
 const $ = (id)=>document.getElementById(id);
 function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
@@ -168,7 +166,6 @@ function hideBlocker(){$('blocker').style.display='none'}
 // -------- Estado --------
 let map, tiles, mapReady=false, pendingRender=false;
 const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
-window.state = state;
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
@@ -208,8 +205,7 @@ function whenLeafletReady(cb){
   const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
   window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
 }
-function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map);
-  attachPopupHandlers(); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
+function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
 whenLeafletReady(()=>{ initMapOnce(); });
 
 // -------- Server I/O --------
@@ -224,7 +220,7 @@ async function fetchAllFromServer(){
     const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null;
     const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null;
     return {
-      id:String(r.id||'').trim(),
+      id:r.id,
       sector:r.sector||'',
       subestacion:r.subestacion||'',
       circuito:r.circuito||'',
@@ -255,7 +251,6 @@ function toProxyImg(u){
   try {
     const s = String(u).trim();
     // id directo
-    if (!APPS_SCRIPT_URL) return s;
     if (/^[\w-]{20,}$/.test(s)) return `${APPS_SCRIPT_URL}?mode=img&id=${s}`;
     // /file/d/<ID>/...
     let m = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
@@ -289,7 +284,7 @@ function getPhotoSrcFromUrls(it, which){
 function markerPopupHtml(p,t,src,m,id){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
   const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
-  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${String(id||'')}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${String(id||'')}">🗑️ Eliminar</button></div>`:'';
+  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">🗑️ Eliminar</button></div>`:'';
   return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
 }
 
@@ -301,8 +296,8 @@ function drawItem(it,fit=false){
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const fIni = getPhotoSrcFromUrls(it,'inicio'); 
   const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, String(it.id||'')));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, String(it.id||'')));
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
 }
@@ -338,20 +333,30 @@ function validateStep1(){
 }
 async function validateStep2(){
   if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
-  const f=$('fotoInicio').files[0];
-  if(!state.actual.inicio||!f) return false;
-  state.actual.fotoInicioFile=f;
-  const b=await imageToBlob(f);
-  $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+  const f=$('fotoInicio').files && $('fotoInicio').files[0];
+  if(!state.actual.inicio) return false;
+  if (f){
+    state.actual.fotoInicioFile=f;
+    const b=await imageToBlob(f);
+    $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+  } else {
+    state.actual.fotoInicioFile=null;
+    $('previewInicio').src=''; $('previewInicioWrap').classList.add('hidden');
+  }
   return true;
 }
 async function validateStep3(){
   if(!state.actual.fin){try{await capFin()}catch(_){}} 
-  const f=$('fotoFin').files[0];
-  if(!state.actual.fin||!f) return false;
-  state.actual.fotoFinFile=f;
-  const b=await imageToBlob(f);
-  $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+  const f=$('fotoFin').files && $('fotoFin').files[0];
+  if(!state.actual.fin) return false;
+  if (f){
+    state.actual.fotoFinFile=f;
+    const b=await imageToBlob(f);
+    $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+  } else {
+    state.actual.fotoFinFile=null;
+    $('previewFin').src=''; $('previewFinWrap').classList.add('hidden');
+  }
   return true;
 }
 function fillResumen(){
@@ -431,31 +436,6 @@ async function deleteById(id){
   // quitar del estado y re-render
   state.items = state.items.filter(x=>x.id!==id);
   clearMapLayers(); renderAllIncremental();
-}
-
-// Delegación de clics en popup
-function attachPopupHandlers(){
-  if(!map) return;
-  map.on('popupopen', (e)=>{
-    const root = e.popup.getElement();
-    if (!root) return;
-    const onClick = async (ev)=>{
-      const btn = ev.target.closest('[data-act]');
-      if(!btn) return;
-      const act = btn.getAttribute('data-act');
-      let id  = btn.getAttribute('data-id');
-  id = id ? String(id).trim() : '';
-      if (act === 'edit') {
-        const it = state.items.find(x=>x.id===id);
-        if (it) startEdit(it);
-      } else if (act === 'delete') {
-        if (confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')){
-          try{ await deleteById(id); toast('Tramo eliminado'); } catch(e){ console.warn(e); toast('No se pudo eliminar'); }
-        }
-      }
-    };
-    root.addEventListener('click', onClick, { once:false });
-  });
 }
 
 // -------- Guardado --------
@@ -721,7 +701,6 @@ function setSelectOptions(sel, arr, placeholder){
 
 async function loadCatalog(){
   try{
-    if(!APPS_SCRIPT_URL){ console.warn('APPS_SCRIPT_URL no definido (modo local). Catálogo vacío.'); catalog={sectors:[],bySector:{},bySubestacion:{}}; return; }
     const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'mode=options';
     const r = await fetch(url, { method: 'GET' });
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -796,32 +775,50 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </script>
 
 <script>
-// Delegación global: maneja clics en botones dentro de popups aunque el mapa aún no exista
+// Delegación global robusta para botones en popups
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('.leaflet-popup [data-act]');
   if (!btn) return;
-  const act = btn.getAttribute('data-act');
-  let id  = btn.getAttribute('data-id');
-  id = id ? String(id).trim() : '';
-  if (!act || !id) return;
+  const act = (btn.getAttribute('data-act') || '').trim();
+  let id  = (btn.getAttribute('data-id') || '').trim();
+  const lat = parseFloat(btn.getAttribute('data-lat')||'');
+  const lng = parseFloat(btn.getAttribute('data-lng')||'');
 
-  // Evita clics repetidos
+  if (id === '' || id === 'undefined' || id === 'null') id = '';
+
+  function resolveItem(){
+    if (!window.state || !Array.isArray(state.items)) return null;
+    if (id) {
+      const byId = state.items.find(x => String(x.id||'').trim() === id);
+      if (byId) return byId;
+    }
+    if (!isNaN(lat) && !isNaN(lng)) {
+      const eps = 1e-7;
+      let it = state.items.find(x => x.inicio && Math.abs(x.inicio.lat - lat) < eps && Math.abs(x.inicio.lng - lng) < eps);
+      if (it) return it;
+      it = state.items.find(x => x.fin && Math.abs(x.fin.lat - lat) < eps && Math.abs(x.fin.lng - lng) < eps);
+      if (it) return it;
+    }
+    return null;
+  }
+
   if (btn.dataset.loading === '1') return;
   btn.dataset.loading = '1';
   const original = btn.textContent;
 
   try {
+    const it = resolveItem();
     if (act === 'edit') {
-      const it = (window.state && Array.isArray(state.items)) ? state.items.find(x => x.id === id) : null;
       if (!it) { alert('No se encontró el tramo para editar.'); return; }
+      if (!id && it.id) btn.setAttribute('data-id', String(it.id));
       btn.textContent = 'Abriendo…';
       if (typeof startEdit === 'function') startEdit(it);
     } else if (act === 'delete') {
       if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
       btn.textContent = 'Eliminando…';
-      if (typeof deleteById === 'function') {
-        await deleteById(id);
-      }
+      const targetId = id || (it && it.id);
+      if (!targetId) { alert('No se pudo determinar el ID a eliminar.'); return; }
+      if (typeof deleteById === 'function') await deleteById(targetId);
     }
   } catch (e) {
     console.warn(e);
