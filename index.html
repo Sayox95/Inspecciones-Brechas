@@ -353,6 +353,11 @@ function clearTempMarkers(){
   try { if(state.mkFinTemp){ state.mkFinTemp.remove && state.mkFinTemp.remove(); state.mkFinTemp=null; } } catch(_){}
 }
 
+
+// Wire buttons for GPS capture
+$('cap-inicio').onclick = async ()=>{ try{ await capInicio(); toast('Punto inicial capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } };
+$('cap-fin').onclick    = async ()=>{ try{ await capFin(); toast('Punto final capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } };
+
 // -------- Guardado --------
 document.getElementById('s4-save').onclick = async ()=>{
   if (!(state.actual.inicio && state.actual.fin)){
