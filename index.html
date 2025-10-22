@@ -332,21 +332,33 @@ function validateStep1(){
   return true;
 }
 async function validateStep2(){
-  if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
-  const f=$('fotoInicio').files[0];
-  if(!state.actual.inicio||!f) return false;
-  state.actual.fotoInicioFile=f;
-  const b=await imageToBlob(f);
-  $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+  if(!state.actual.inicio){ try{ await capInicio(); } catch(_){} }
+  const f = $('fotoInicio').files && $('fotoInicio').files[0];
+  if(!state.actual.inicio) return false; // foto opcional
+  if (f){
+    state.actual.fotoInicioFile = f;
+    const b = await imageToBlob(f);
+    $('previewInicio').src = blobUrl(b);
+    $('previewInicioWrap').classList.remove('hidden');
+  } else {
+    state.actual.fotoInicioFile = null;
+    $('previewInicio').src = ''; $('previewInicioWrap').classList.add('hidden');
+  }
   return true;
 }
 async function validateStep3(){
-  if(!state.actual.fin){try{await capFin()}catch(_){}} 
-  const f=$('fotoFin').files[0];
-  if(!state.actual.fin||!f) return false;
-  state.actual.fotoFinFile=f;
-  const b=await imageToBlob(f);
-  $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+  if(!state.actual.fin){ try{ await capFin(); } catch(_){} }
+  const f = $('fotoFin').files && $('fotoFin').files[0];
+  if(!state.actual.fin) return false; // foto opcional
+  if (f){
+    state.actual.fotoFinFile = f;
+    const b = await imageToBlob(f);
+    $('previewFin').src = blobUrl(b);
+    $('previewFinWrap').classList.remove('hidden');
+  } else {
+    state.actual.fotoFinFile = null;
+    $('previewFin').src = ''; $('previewFinWrap').classList.add('hidden');
+  }
   return true;
 }
 function fillResumen(){
@@ -820,6 +832,97 @@ document.addEventListener('click', async (ev) => {
   } finally {
     btn.textContent = original;
     btn.dataset.loading = '';
+  }
+});
+</script>
+
+<script>
+let _catalogLoaded = false;
+async function ensureCatalogLoaded(){
+  if (_catalogLoaded) return;
+  // Evitar fetch en file:// (no sirve CORS relative)
+  if (location.protocol === 'file:') {
+    toast('Para cargar catálogo, abre el HTML desde http(s) o configura APPS_SCRIPT_URL absoluto.');
+    return;
+  }
+  try{
+    await loadCatalog();
+    initCascadingSelects();
+    _catalogLoaded = true;
+  }catch(e){
+    console.warn('Fallo cargar catálogo', e);
+  }
+}
+
+// Hook: cuando abres el formulario
+(function(){
+  const btnNew = document.getElementById('newTramo');
+  if (btnNew) {
+    const prev = btnNew.onclick;
+    btnNew.onclick = async (ev)=>{
+      if (typeof prev === 'function') prev.call(btnNew, ev);
+      await ensureCatalogLoaded();
+    };
+  }
+})();
+
+// También cuando se muestre el paso 1 (por navegación interna)
+(function(){
+  const origSetStep = window.setStep;
+  if (typeof origSetStep === 'function') {
+    window.setStep = function(n){
+      origSetStep(n);
+      if (n === 1) ensureCatalogLoaded();
+    }
+  }
+})();
+
+// Guard: bootstrap contra file:// para el fetch inicial de registros
+(function(){
+  const origBootstrap = window.bootstrap;
+  if (typeof origBootstrap === 'function') {
+    window.bootstrap = async function(){
+      if (location.protocol === 'file:') {
+        toast('Estás abriendo el archivo en modo file://. Sirve el HTML por http(s) para evitar CORS.');
+        return;
+      }
+      return await origBootstrap();
+    }
+  }
+})();
+</script>
+
+<script>
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('.leaflet-popup [data-act]');
+  if (!btn) return;
+  const act = btn.getAttribute('data-act');
+  const id  = btn.getAttribute('data-id') || '';
+
+  function findByPopupCoords(root){
+    try{
+      const meta = root.querySelector('.popup-meta');
+      if (!meta) return null;
+      const m = /Lat:\s*([\-\d\.]+) .* Lng:\s*([\-\d\.]+)/.exec(meta.textContent || '');
+      if (!m) return null;
+      const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+      const eps = 1e-6;
+      return (window.state && Array.isArray(state.items)) ? state.items.find(it => it.inicio && Math.abs(it.inicio.lat-lat)<eps && Math.abs(it.inicio.lng-lng)<eps) : null;
+    }catch(e){ return null; }
+  }
+
+  const popupRoot = btn.closest('.leaflet-popup');
+  let item = (window.state && Array.isArray(state.items)) ? state.items.find(x => x.id === id) : null;
+  if (!item && popupRoot) item = findByPopupCoords(popupRoot);
+  if (act === 'edit') {
+    if (!item) { alert('No se encontró el tramo para editar.'); return; }
+    if (typeof startEdit === 'function') startEdit(item);
+  } else if (act === 'delete') {
+    if (!id && item && item.id) btn.setAttribute('data-id', item.id);
+    if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
+    if (typeof deleteById === 'function') {
+      await deleteById(id || (item && item.id));
+    }
   }
 });
 </script>
