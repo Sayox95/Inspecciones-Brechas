@@ -11,10 +11,8 @@
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-.btn:disabled{opacity:.75;cursor:not-allowed}
-
     
-/* --- Spinner en botones --- */
+/* Spinner in buttons */
 .btn.loading { position: relative; pointer-events: none; opacity: .85; }
 .btn .spinner {
   display: inline-block; width: 1em; height: 1em; vertical-align: -2px;
@@ -22,6 +20,9 @@
   margin-right: .5em; animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.btn:disabled{opacity:.75;cursor:not-allowed}
+.btn-danger{background:#ef4444;color:#fff;border:0;border-radius:12px;padding:10px 12px;font-weight:700}
+.hidden{display:none}
 
 :root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
     *{box-sizing:border-box} html,body{height:100%}
@@ -91,6 +92,10 @@
             </div>
           </div>
           <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
+    <div class="field" style="margin-top:8px">
+      <label>Editar tramo existente (opcional)</label>
+      <select id="existing" class="w-full"><option value="">— Nuevo tramo —</option></select>
+    </div>
           <div class="bar" style="margin-top:10px">
             <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
             <button id="s1-next" class="btn btn-primary">Siguiente</button>
@@ -103,7 +108,7 @@
           <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto obligatoria</u>.</div>
           <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
           <div class="field">
-            <label>Foto punto inicial (requerida)</label>
+            <label>Foto punto inicial (opcional)</label>
             <input id="fotoInicio" type="file" accept="image/*" capture="environment"/>
           </div>
           <div id="previewInicioWrap" class="hidden">
@@ -121,7 +126,7 @@
           <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto obligatoria</u>.</div>
           <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
           <div class="field">
-            <label>Foto punto final (requerida)</label>
+            <label>Foto punto final (opcional)</label>
             <input id="fotoFin" type="file" accept="image/*" capture="environment"/>
           </div>
           <div id="previewFinWrap" class="hidden">
@@ -165,7 +170,7 @@ function hideBlocker(){$('blocker').style.display='none'}
 
 // -------- Estado --------
 let map, tiles, mapReady=false, pendingRender=false;
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
@@ -273,6 +278,19 @@ function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.rem
 function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
 function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 
+function toEmbeddableImageUrl(u){
+  if (!u) return '';
+  try {
+    const url = String(u).trim();
+    if (url.startsWith('data:image')) return url;
+    if (/drive\.google\.com\/uc\?/i.test(url)) return url;
+    let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    m = url.match(/[?&]id=([^&]+)/i);
+    if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
+    return url;
+  } catch { return u; }
+}
 
 function getPhotoSrcFromUrls(it, which){
   const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
@@ -293,8 +311,8 @@ function drawItem(it,fit=false){
   const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
   const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const fIni = getPhotoSrcFromUrls(it,'inicio'); 
-  const fFin = getPhotoSrcFromUrls(it,'fin'); 
+  const fIni = getPhotoSrcFromUrls(it,'inicio'); console.debug('popup src inicio', fIni, it.fotoInicioUrl);
+  const fFin = getPhotoSrcFromUrls(it,'fin'); console.debug('popup src fin', fFin, it.fotoFinUrl);
   mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
@@ -377,23 +395,8 @@ function clearTempMarkers(){
 
 
 // Wire buttons for GPS capture
-
-// --- Helper: loading spinner en botones ---
-function setBtnLoading(btn, loading, label){
-  if(!btn) return;
-  if(loading){
-    btn.dataset._label = btn.dataset._label || btn.textContent;
-    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
-    btn.classList.add('loading');
-    btn.disabled = true;
-  } else {
-    const original = btn.dataset._label || btn.textContent;
-    btn.textContent = original;
-    btn.classList.remove('loading');
-    btn.disabled = false;
-  }
-}
-
+$('cap-inicio').onclick = async ()=>{ try{ await capInicio(); toast('Punto inicial capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } };
+$('cap-fin').onclick    = async ()=>{ try{ await capFin(); toast('Punto final capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } };
 
 // -------- Guardado --------
 document.getElementById('s4-save').onclick = async ()=>{
@@ -495,241 +498,223 @@ $('syncBtn').addEventListener('click', async ()=>{
 })();
 </script>
 
-<!-- === Inyecciones de robustez (polyfills y overrides de imagen) === -->
 <script>
-// Polyfill requestIdleCallback / cancelIdleCallback
-window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) {
-  const start = Date.now();
-  return setTimeout(function () {
-    cb({
-      didTimeout: false,
-      timeRemaining: function () {
-        return Math.max(0, 50 - (Date.now() - start));
-      }
-    });
-  }, (opts && opts.timeout) || 1);
-};
-window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
-
-// Fallback para crypto.randomUUID
-if (!window.crypto) { window.crypto = {}; }
-if (!crypto.randomUUID) {
-  crypto.randomUUID = function () {
-    const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
-    return tpl.replace(/[xy]/g, function(c){
-      let r;
-      if (window.crypto && crypto.getRandomValues) {
-        r = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
-      } else {
-        r = Math.floor(Math.random() * 16);
-      }
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
+// Helpers
+function setBtnLoading(btn, loading, label){
+  if(!btn) return;
+  if(loading){
+    btn.dataset._label = btn.dataset._label || btn.textContent;
+    btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
+    btn.classList.add('loading');
+    btn.disabled = true;
+  } else {
+    const original = btn.dataset._label || btn.textContent;
+    btn.textContent = original;
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
 }
 
-// Helper: lee imagen como ImageBitmap si existe, o como Image con dataURL
-async function readImageBitmap(file){
-  if (window.createImageBitmap) {
-    try {
-      return await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch (e) {}
-  }
-  const dataURL = await new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result);
-    fr.onerror = rej;
-    fr.readAsDataURL(file);
-  });
-  const img = await new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = rej;
-    i.src = dataURL;
-  });
-  // objeto compatible con drawImage
-  return { width: img.width, height: img.height, _img: img };
-}
-
-// Override no disruptivo: redefine imageToBlob con fallbacks (la definición posterior prevalece)
-async function imageToBlob(file){
-  try {
-    // Variables globales esperadas por el proyecto
-    const MAX = typeof IMG_MAX !== 'undefined' ? IMG_MAX : 1920;
-    const Q = typeof IMG_QUALITY !== 'undefined' ? IMG_QUALITY : 0.85;
-
-    const bmp = await readImageBitmap(file);
-    const srcW = bmp.width, srcH = bmp.height;
-    const scale = Math.min(1, MAX / Math.max(srcW, srcH));
-    const w = Math.round(srcW * scale);
-    const h = Math.round(srcH * scale);
-
-    let canvas;
-    if (typeof OffscreenCanvas !== 'undefined'){
-      canvas = new OffscreenCanvas(w, h);
-    } else {
-      canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-    }
-    const ctx = canvas.getContext('2d', { alpha: false });
-    ctx.drawImage(bmp._img ? bmp._img : bmp, 0, 0, w, h);
-
-    async function toBlob(c, t, q){
-      if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
-      return await new Promise(r => c.toBlob(r, t, q));
-    }
-    return await toBlob(canvas, 'image/jpeg', Q);
-  } catch (e) {
-    // Último recurso: devolver el archivo original
-    return file;
-  }
-}
-</script>
-
-<script>
-// Inicializa handlers cuando el DOM está listo
-document.addEventListener('DOMContentLoaded', () => {
-  function setBtnLoading(btn, loading, label){
-    if(!btn) return;
-    if(loading){
-      btn.dataset._label = btn.dataset._label || btn.textContent;
-      btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>' + (label || btn.dataset._label);
-      btn.classList.add('loading');
-      btn.disabled = true;
-    } else {
-      const original = btn.dataset._label || btn.textContent;
-      btn.textContent = original;
-      btn.classList.remove('loading');
-      btn.disabled = false;
-    }
-  }
-
-  const capIniBtn = document.getElementById('cap-inicio');
-  if (capIniBtn) {
-    capIniBtn.onclick = async () => {
-      setBtnLoading(capIniBtn, true, 'Capturando coordenadas…');
-      try {
-        await capInicio();
-        toast('Punto inicial capturado');
-      } catch (e) {
-        console.warn(e);
-        toast('No se pudo obtener GPS');
-      } finally {
-        setBtnLoading(capIniBtn, false);
-      }
-    };
-  }
-
-  const capFinBtn = document.getElementById('cap-fin');
-  if (capFinBtn) {
-    capFinBtn.onclick = async () => {
-      setBtnLoading(capFinBtn, true, 'Capturando coordenadas…');
-      try {
-        await capFin();
-        toast('Punto final capturado');
-      } catch (e) {
-        console.warn(e);
-        toast('No se pudo obtener GPS');
-      } finally {
-        setBtnLoading(capFinBtn, false);
-      }
-    };
-  }
-});
-</script>
-<script>
-
-// ===== Opciones de catálogo (Sector / Subestación / Circuito) =====
+// Catalog for cascading selects
 let catalog = { sectors: [], bySector: {}, bySubestacion: {} };
-
 function setSelectOptions(sel, arr, placeholder){
+  if (!sel) return;
   sel.innerHTML = '';
   if (placeholder) {
     const opt = document.createElement('option');
     opt.value = ''; opt.textContent = placeholder;
     sel.appendChild(opt);
   }
-  for (const v of arr){
-    const o = document.createElement('option');
-    o.value = v; o.textContent = v;
-    sel.appendChild(o);
-  }
+  (arr||[]).forEach(v=>{
+    const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
+  });
 }
-
 async function loadCatalog(){
   try{
-    const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'mode=options';
-    const r = await fetch(url, { method: 'GET' });
-    if (!r.ok) throw new Error('HTTP '+r.status);
+    const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?')?'&':'?') + 'mode=options';
+    const r = await fetch(url);
     const data = await r.json();
-    if (!data || !data.ok) throw new Error('Respuesta inválida');
-    catalog.sectors = data.sectors || [];
-    catalog.bySector = data.bySector || {};
-    catalog.bySubestacion = data.bySubestacion || {};
-  }catch(e){
-    console.warn('No se pudo cargar catálogo', e);
-    catalog = { sectors: [], bySector: {}, bySubestacion: {} };
-  }
+    if (data && data.ok){
+      catalog.sectors = data.sectors||[];
+      catalog.bySector = data.bySector||{};
+      catalog.bySubestacion = data.bySubestacion||{};
+    }
+  }catch(e){ console.warn('catalog',e); }
 }
-
 function initCascadingSelects(){
   const selSector = document.getElementById('sector');
   const selSub = document.getElementById('subestacion');
   const selCirc = document.getElementById('circuito');
-
-  // Inicial: sectores
-  setSelectOptions(selSector, catalog.sectors, 'Selecciona un sector…');
-  selSector.disabled = false;
-
-  // Listeners
+  setSelectOptions(selSector, catalog.sectors, 'Selecciona un sector…'); selSector.disabled=false;
   selSector.onchange = ()=>{
-    const sec = selSector.value;
-    const subs = (catalog.bySector[sec] || []);
-    setSelectOptions(selSub, subs, subs.length ? 'Selecciona una subestación…' : 'Sin subestaciones');
-    selSub.disabled = subs.length === 0;
-    // Reset circuito
-    setSelectOptions(selCirc, [], 'Selecciona una subestación…');
-    selCirc.disabled = true;
-    // Actualiza estado
-    state.actual.sector = sec || '';
-    state.actual.subestacion = '';
-    state.actual.circuito = '';
+    const sec=selSector.value; const subs=catalog.bySector[sec]||[];
+    setSelectOptions(selSub, subs, subs.length?'Selecciona una subestación…':'Sin subestaciones'); selSub.disabled=subs.length===0;
+    setSelectOptions(selCirc, [], 'Selecciona una subestación…'); selCirc.disabled=true;
+    state.actual.sector = sec || ''; state.actual.subestacion=''; state.actual.circuito='';
   };
-
   selSub.onchange = ()=>{
-    const sub = selSub.value;
-    const circs = (catalog.bySubestacion[sub] || []);
-    setSelectOptions(selCirc, circs, circs.length ? 'Selecciona un circuito…' : 'Sin circuitos');
-    selCirc.disabled = circs.length === 0;
-    state.actual.subestacion = sub || '';
-    state.actual.circuito = '';
+    const sub=selSub.value; const circs=catalog.bySubestacion[sub]||[];
+    setSelectOptions(selCirc, circs, circs.length?'Selecciona un circuito…':'Sin circuitos'); selCirc.disabled=circs.length===0;
+    state.actual.subestacion = sub || ''; state.actual.circuito='';
   };
-
-  selCirc.onchange = ()=>{
-    state.actual.circuito = selCirc.value || '';
-  };
-
-  // Preseleccionar si viene de un registro previo
-  if (state.actual.sector){
-    selSector.value = state.actual.sector;
-    selSector.onchange();
-    if (state.actual.subestacion){
-      selSub.value = state.actual.subestacion;
-      selSub.onchange();
-      if (state.actual.circuito){
-        selCirc.value = state.actual.circuito;
-      }
-    }
-  }
+  selCirc.onchange = ()=>{ state.actual.circuito = selCirc.value || ''; };
 }
 
-document.addEventListener('DOMContentLoaded', async ()=>{
-  // Carga catálogo y configura selects
-  await loadCatalog();
-  initCascadingSelects();
+// Edit / Delete
+function humanizeItem(it){
+  const sec=it.sector||'(sin sector)'; const sub=it.subestacion||'(sin subestación)'; const cir=it.circuito||'(sin circuito)'; const t=it.tipo||'Apertura';
+  return `${sec} • ${sub} • ${cir} — ${t} — ${it.id}`;
+}
+function populateExistingSelect(){
+  const sel=document.getElementById('existing'); if(!sel) return;
+  const cur=sel.value; sel.innerHTML = '<option value="">— Nuevo tramo —</option>';
+  (state.items||[]).forEach(it=>{ if(!it.id) return; const o=document.createElement('option'); o.value=it.id; o.textContent=humanizeItem(it); sel.appendChild(o); });
+  if (cur) sel.value=cur;
+}
+async function buildPayloadFromState(){
+  let fotoInicioB64=null, fotoFinB64=null;
+  if (state.actual.fotoInicioFile) fotoInicioB64 = await blobToDataURL(await imageToBlob(state.actual.fotoInicioFile));
+  if (state.actual.fotoFinFile)    fotoFinB64    = await blobToDataURL(await imageToBlob(state.actual.fotoFinFile));
+  return {
+    id: state.actual.id || crypto.randomUUID(),
+    sector: state.actual.sector,
+    subestacion: state.actual.subestacion,
+    circuito: state.actual.circuito,
+    tipo: state.actual.tipo,
+    inicio: state.actual.inicio,
+    fin: state.actual.fin,
+    fotoInicio: fotoInicioB64, fotoFin: fotoFinB64,
+    createdAt: state.actual.createdAt || new Date().toISOString()
+  };
+}
+function startEditById(id){
+  const it=(state.items||[]).find(x=>x.id===id); if(!it){ toast('No se encontró el tramo'); return; }
+  state.actual = { id:it.id, sector:it.sector||'', subestacion:it.subestacion||'', circuito:it.circuito||'', tipo:it.tipo||'Apertura', inicio:it.inicio||null, fin:it.fin||null, fotoInicioFile:null, fotoFinFile:null };
+  clearTempMarkers();
+  if (it.inicio){ const mk=L.marker([it.inicio.lat,it.inicio.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkInicioTemp=mk; }
+  if (it.fin){ const mk=L.marker([it.fin.lat,it.fin.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkFinTemp=mk; }
+  openSheet(); setStep(2);
+  const a=document.getElementById('sector'), b=document.getElementById('subestacion'), c=document.getElementById('circuito');
+  if(a){ a.value=state.actual.sector||''; a.onchange && a.onchange(); }
+  if(b){ b.value=state.actual.subestacion||''; b.onchange && b.onchange(); }
+  if(c){ c.value=state.actual.circuito||''; }
+  const delBtn=document.getElementById('s4-delete'); if(delBtn) delBtn.classList.remove('hidden');
+}
+
+// DOM Ready initializations
+document.addEventListener('DOMContentLoaded', ()=>{
+  // capture buttons with spinner
+  const capIniBtn = document.getElementById('cap-inicio');
+  if (capIniBtn){
+    capIniBtn.onclick = async ()=>{
+      setBtnLoading(capIniBtn,true,'Capturando coordenadas…');
+      try{ await capInicio(); toast('Punto inicial capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } finally { setBtnLoading(capIniBtn,false); }
+    };
+  }
+  const capFinBtn = document.getElementById('cap-fin');
+  if (capFinBtn){
+    capFinBtn.onclick = async ()=>{
+      setBtnLoading(capFinBtn,true,'Capturando coordenadas…');
+      try{ await capFin(); toast('Punto final capturado'); }catch(e){ console.warn(e); toast('No se pudo obtener GPS'); } finally { setBtnLoading(capFinBtn,false); }
+    };
+  }
+
+  const sel=document.getElementById('existing');
+  if (sel){
+    sel.onchange = ()=>{
+      const id = sel.value;
+      if (id) startEditById(id);
+      else { state.actual = baseActual(); clearTempMarkers(); const delBtn=document.getElementById('s4-delete'); if(delBtn) delBtn.classList.add('hidden'); }
+    };
+  }
+
+  const delBtn=document.getElementById('s4-delete');
+  if (delBtn){
+    delBtn.onclick = async ()=>{
+      if (!state.actual.id){ toast('No hay tramo seleccionado.'); return; }
+      if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
+      try{
+        showBlocker('Eliminando…');
+        const payload={ mode:'delete', ids:[ state.actual.id ] };
+        const r=await fetch(APPS_SCRIPT_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)});
+        const data=await r.json();
+        if (data && data.ok){ toast('Tramo eliminado'); state.actual=baseActual(); await reloadAll(); closeSheet(); }
+        else { toast('No se pudo eliminar'); }
+      }catch(e){ console.warn(e); toast('Error al eliminar'); } finally { hideBlocker(); }
+    };
+  }
 });
 
+// Hook after fetchAllFromServer to refresh existing selector
+(function(){
+  const _fetchAll = fetchAllFromServer;
+  fetchAllFromServer = async function(){
+    const rows = await _fetchAll();
+    state.items = rows; populateExistingSelect();
+    return rows;
+  };
+})();
+
+// Load catalog
+document.addEventListener('DOMContentLoaded', async ()=>{ await loadCatalog(); initCascadingSelects(); });
+</script>
+
+<!-- === Polyfills & Image Fallbacks === -->
+<script>
+// requestIdleCallback polyfill
+window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) {
+  const start = Date.now();
+  return setTimeout(function () {
+    cb({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } });
+  }, (opts && opts.timeout) || 1);
+};
+window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
+
+// crypto.randomUUID fallback
+if (!window.crypto) { window.crypto = {}; }
+if (!crypto.randomUUID) {
+  crypto.randomUUID = function () {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+      let r = (window.crypto && crypto.getRandomValues) ? (crypto.getRandomValues(new Uint8Array(1))[0] & 15)
+                                                       : Math.floor(Math.random()*16);
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+}
+
+// readImageBitmap fallback
+async function readImageBitmap(file){
+  if (window.createImageBitmap) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch(e){}
+  }
+  const dataURL = await new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataURL;
+  });
+  return { width: img.width, height: img.height, _img: img };
+}
+
+// Override imageToBlob with fallbacks (keeps original contract)
+async function imageToBlob(file){
+  try {
+    const MAX = typeof IMG_MAX !== 'undefined' ? IMG_MAX : 1600;
+    const Q = typeof IMG_QUALITY !== 'undefined' ? IMG_QUALITY : 0.75;
+    const bmp = await readImageBitmap(file);
+    const srcW = bmp.width, srcH = bmp.height;
+    const scale = Math.min(1, MAX / Math.max(srcW, srcH));
+    const w = Math.round(srcW * scale), h = Math.round(srcH * scale);
+    let canvas;
+    if (typeof OffscreenCanvas !== 'undefined'){ canvas = new OffscreenCanvas(w, h); }
+    else { canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; }
+    const ctx = canvas.getContext('2d', { alpha:false });
+    ctx.drawImage(bmp._img ? bmp._img : bmp, 0, 0, w, h);
+    async function toBlob(c,t,q){ if (c.convertToBlob) return c.convertToBlob({type:t, quality:q}); return new Promise(r=>c.toBlob(r,t,q)); }
+    return await toBlob(canvas, 'image/jpeg', Q);
+  } catch(e){ return file; }
+}
 </script>
 </body>
 </html>
