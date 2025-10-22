@@ -786,5 +786,42 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 </script>
+
+<script>
+// Delegación global: maneja clics en botones dentro de popups aunque el mapa aún no exista
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('.leaflet-popup [data-act]');
+  if (!btn) return;
+  const act = btn.getAttribute('data-act');
+  const id  = btn.getAttribute('data-id');
+  if (!act || !id) return;
+
+  // Evita clics repetidos
+  if (btn.dataset.loading === '1') return;
+  btn.dataset.loading = '1';
+  const original = btn.textContent;
+
+  try {
+    if (act === 'edit') {
+      const it = (window.state && Array.isArray(state.items)) ? state.items.find(x => x.id === id) : null;
+      if (!it) { alert('No se encontró el tramo para editar.'); return; }
+      btn.textContent = 'Abriendo…';
+      if (typeof startEdit === 'function') startEdit(it);
+    } else if (act === 'delete') {
+      if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
+      btn.textContent = 'Eliminando…';
+      if (typeof deleteById === 'function') {
+        await deleteById(id);
+      }
+    }
+  } catch (e) {
+    console.warn(e);
+    alert('Ocurrió un error al procesar la acción.');
+  } finally {
+    btn.textContent = original;
+    btn.dataset.loading = '';
+  }
+});
+</script>
 </body>
 </html>
