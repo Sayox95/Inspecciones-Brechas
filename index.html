@@ -8,9 +8,7 @@
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-const requestIdleCallback = window.requestIdleCallback || (cb => setTimeout(cb, 0));
-</script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
@@ -155,17 +153,7 @@ function hideBlocker(){$('blocker').style.display='none'}
 
 // -------- Estado --------
 let map, tiles, mapReady=false, pendingRender=false;
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
-function addLayer(layer){
-  try{ state.layers.push(layer); layer.addTo(map); }catch(e){}
-}
-function clearMapLayers(){
-  try{
-    for (const l of state.layers){ try{ map.removeLayer(l); }catch(_){} }
-    state.layers.length = 0;
-  }catch(e){}
-}
-
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
@@ -248,45 +236,31 @@ async function syncOneToServer(it){
 
 function toProxyImg(u){
   if (!u) return '';
-  const s = String(u).trim();
-
-  function extractFileId(input){
-    try{
-      // If looks like a bare fileId (no scheme and long token), accept
-      if (!/^https?:\/\//i.test(input) && /^[A-Za-z0-9_-]{15,}$/.test(input)) return input;
-
-      const url = new URL(input, window.location.origin);
-
-      // Only handle drive.google.com
-      if (url.hostname.includes('drive.google.com')) {
-        // Pattern: /file/d/<id>/...
-        const parts = url.pathname.split('/').filter(Boolean);
-        const idx = parts.indexOf('d');
-        if (parts.includes('file') && idx >= 0 && parts[idx+1]) return parts[idx+1];
-
-        // Pattern: ?id=<id>
-        const qp = url.searchParams.get('id');
-        if (qp) return qp;
-      }
-      return null;
-    } catch (e) {
-      // Fallback: manual query parse if it was a non-URL string with ?id=
-      const q = String(input);
-      const qpos = q.indexOf('?');
-      if (qpos >= 0) {
-        const qs = q.slice(qpos + 1).split('&');
-        for (const kv of qs) {
-          const [k, v] = kv.split('=');
-          if (k === 'id' && v) return decodeURIComponent(v);
-        }
-      }
-      return null;
+  try {
+    const s = String(u).trim();
+    // id directo
+    if (/^[\w-]{20,}$/.test(s)) return `${APPS_SCRIPT_URL}?mode=img&id=${s}`;
+    // /file/d/<ID>/...
+    let m = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
+    // ...?id=<ID>
+    m = s.match(/[?&]id=([^&]+)/i);
+    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
+    // uc?export=view&id=...
+    if (/drive\.google\.com\/uc\?/.test(s)) {
+      const mid = s.match(/[?&]id=([^&]+)/i);
+      if (mid && mid[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${mid[1]}`;
     }
-  }
-
-  const id = extractFileId(s);
-  return id ? `/api/sync?mode=img&id=${id}` : s;
+    // otros orígenes
+    if (/^https?:\/\//i.test(s)) return s;
+    return s;
+  } catch { return u; }
 }
+// -------- Render --------
+function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
+function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
+function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
+
 
 function getPhotoSrcFromUrls(it, which){
   const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
@@ -307,9 +281,9 @@ function drawItem(it,fit=false){
   const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
   const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const fIni = getPhotoSrcFromUrls(it,'inicio');
-const fFin = getPhotoSrcFromUrls(it,'fin');
-mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
+  const fIni = getPhotoSrcFromUrls(it,'inicio'); 
+  const fFin = getPhotoSrcFromUrls(it,'fin'); 
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
@@ -492,6 +466,98 @@ $('syncBtn').addEventListener('click', async ()=>{
     if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
   }
 })();
+</script>
+
+<!-- === Inyecciones de robustez (polyfills y overrides de imagen) === -->
+<script>
+// Polyfill requestIdleCallback / cancelIdleCallback
+window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) {
+  const start = Date.now();
+  return setTimeout(function () {
+    cb({
+      didTimeout: false,
+      timeRemaining: function () {
+        return Math.max(0, 50 - (Date.now() - start));
+      }
+    });
+  }, (opts && opts.timeout) || 1);
+};
+window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
+
+// Fallback para crypto.randomUUID
+if (!window.crypto) { window.crypto = {}; }
+if (!crypto.randomUUID) {
+  crypto.randomUUID = function () {
+    const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+    return tpl.replace(/[xy]/g, function(c){
+      let r;
+      if (window.crypto && crypto.getRandomValues) {
+        r = crypto.getRandomValues(new Uint8Array(1))[0] & 15;
+      } else {
+        r = Math.floor(Math.random() * 16);
+      }
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+}
+
+// Helper: lee imagen como ImageBitmap si existe, o como Image con dataURL
+async function readImageBitmap(file){
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {}
+  }
+  const dataURL = await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = dataURL;
+  });
+  // objeto compatible con drawImage
+  return { width: img.width, height: img.height, _img: img };
+}
+
+// Override no disruptivo: redefine imageToBlob con fallbacks (la definición posterior prevalece)
+async function imageToBlob(file){
+  try {
+    // Variables globales esperadas por el proyecto
+    const MAX = typeof IMG_MAX !== 'undefined' ? IMG_MAX : 1920;
+    const Q = typeof IMG_QUALITY !== 'undefined' ? IMG_QUALITY : 0.85;
+
+    const bmp = await readImageBitmap(file);
+    const srcW = bmp.width, srcH = bmp.height;
+    const scale = Math.min(1, MAX / Math.max(srcW, srcH));
+    const w = Math.round(srcW * scale);
+    const h = Math.round(srcH * scale);
+
+    let canvas;
+    if (typeof OffscreenCanvas !== 'undefined'){
+      canvas = new OffscreenCanvas(w, h);
+    } else {
+      canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+    }
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(bmp._img ? bmp._img : bmp, 0, 0, w, h);
+
+    async function toBlob(c, t, q){
+      if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
+      return await new Promise(r => c.toBlob(r, t, q));
+    }
+    return await toBlob(canvas, 'image/jpeg', Q);
+  } catch (e) {
+    // Último recurso: devolver el archivo original
+    return file;
+  }
+}
 </script>
 </body>
 </html>
