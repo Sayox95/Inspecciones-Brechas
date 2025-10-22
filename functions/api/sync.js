@@ -4,16 +4,16 @@ export async function onRequestOptions({ request }) {
   return new Response(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': origin,                   // o fija tu origen
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',    // ← añade GET
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Range',
+      'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
       'Vary': 'Origin'
     }
   });
 }
 
 function getUpstream(env) {
-  // Reusa tu variable actual; si prefieres, renómbrala a APPS_SCRIPT_URL
   return env?.APPS_SCRIPT_POST_URL
     || 'https://script.google.com/macros/s/AKfycby1FnajlCXUifEGlaqSwLZ4Q9LfVoVH8dWcSzL0_S2x4EFWPD5cygXikqsMm8Yhbr9TuA/exec';
 }
@@ -23,11 +23,9 @@ export async function onRequestGet({ request, env }) {
   const upstream = getUpstream(env);
 
   try {
-    // Conserva query string (?mode=all, filtros futuros, etc.)
     const url = new URL(request.url);
     const qs = url.search || '';
 
-    // Timeout manual (opcional)
     const controller = new AbortController();
     const timeoutMs = 45000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -39,15 +37,17 @@ export async function onRequestGet({ request, env }) {
 
     clearTimeout(timer);
 
-    const text = await resp.text();
-    const ct = resp.headers.get('content-type') || 'application/json';
+    // NO conviertas a text(): rompe binarios (imágenes)
+    // Usa el stream tal cual (resp.body) y copia el Content-Type original
+    const ct = resp.headers.get('content-type') || 'application/octet-stream';
 
-    return new Response(text, {
+    return new Response(resp.body, {
       status: resp.status,
       headers: {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
         'Vary': 'Origin',
         'Content-Type': ct,
         'Cache-Control': 'no-store'
@@ -59,7 +59,8 @@ export async function onRequestGet({ request, env }) {
       headers: {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
         'Vary': 'Origin',
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store'
@@ -70,16 +71,14 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   const origin = request.headers.get('Origin') || '*';
-  const bodyText = await request.text(); // JSON en texto (incluye base64)
+  const bodyText = await request.text();
   const upstream = getUpstream(env);
 
   try {
-    // Timeout manual (opcional)
     const controller = new AbortController();
     const timeoutMs = 45000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    // Reenvía tal cual al Apps Script; text/plain es más tolerante con base64
     const upstreamResp = await fetch(upstream, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -89,17 +88,18 @@ export async function onRequestPost({ request, env }) {
 
     clearTimeout(timer);
 
-    const text = await upstreamResp.text();
-    const upstreamCT = upstreamResp.headers.get('content-type') || 'application/json';
+    // Igual que en GET: no lo conviertas a texto; respeta el tipo original
+    const ct = upstreamResp.headers.get('content-type') || 'application/json';
 
-    return new Response(text, {
+    return new Response(upstreamResp.body, {
       status: upstreamResp.status,
       headers: {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
         'Vary': 'Origin',
-        'Content-Type': upstreamCT,
+        'Content-Type': ct,
         'Cache-Control': 'no-store'
       }
     });
@@ -109,7 +109,8 @@ export async function onRequestPost({ request, env }) {
       headers: {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
         'Vary': 'Origin',
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store'
