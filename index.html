@@ -4,17 +4,11 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <link rel="icon" href="data:,"/>
-  <title>Captura de Brechas — Móvil Optimizado</title>
+  <title>Captura de Brechas — Versión Limpia</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-try{$('s1-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s2-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s3-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-
-</script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root{--bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;--ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)}
@@ -32,10 +26,9 @@ try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
     .chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
     .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
-    img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer;transition:transform .2s ease} img.preview:hover{transform:scale(1.05)}
+    img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
     .popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
-    .pending-banner{position:fixed;left:0;right:0;bottom:0;z-index:1500;background:#2a1d0b;color:#ffe7c2;border-top:1px solid #4b2e0f;padding:8px 12px;font-size:13px;display:none} .pending-banner strong{color:#ffd39a}
-    .blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:center;font-weight:600}
+    .blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:var(--shadow);text-align:center;font-weight:600}
     .spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
     .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
   </style>
@@ -43,9 +36,9 @@ try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
 <body>
   <header>
     <h1>Captura de Brechas</h1>
-    <span class="muted">Móvil • GPS • Fotos</span>
+    <span class="muted">Móvil • GPS • Fotos (Drive)</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
+      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Actualizar</button>
     </div>
   </header>
 
@@ -65,17 +58,17 @@ try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
           <div class="row">
             <div class="field">
               <label>Sector</label>
-              <input id="sector" type="text" placeholder="Ej: Norte" autocomplete="one-time-code"/>
+              <input id="sector" type="text" placeholder="Ej: Norte" autocomplete="off"/>
             </div>
             <div class="field">
               <label>Subestación</label>
-              <input id="subestacion" type="text" placeholder="Ej: S/E Progreso"/>
+              <input id="subestacion" type="text" placeholder="Ej: S/E Progreso" autocomplete="off"/>
             </div>
           </div>
           <div class="row">
             <div class="field">
               <label>Circuito</label>
-              <input id="circuito" type="text" placeholder="Ej: CIR-123"/>
+              <input id="circuito" type="text" placeholder="Ej: CIR-123" autocomplete="off"/>
             </div>
             <div class="field">
               <label>Tipo de brecha</label>
@@ -146,58 +139,28 @@ try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
   <div id="toast" class="toast"></div>
 
 <script>
-// Polyfills
-window.requestIdleCallback = window.requestIdleCallback || function(cb){ return setTimeout(()=>cb({ timeRemaining:()=>0, didTimeout:true }), 1); };
-window.cancelIdleCallback = window.cancelIdleCallback || function(id){ clearTimeout(id); };
-
-function whenLeafletReady(cb){
-  if (window.L) return cb();
-  const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
-  window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
-}
-
-const APPS_SCRIPT_URL = "/api/sync";
+// -------- Config --------
+const APPS_SCRIPT_URL = "/api/sync";  // tu proxy a Apps Script
 const IMG_MAX = 1280;
 const IMG_QUALITY = 0.82;
-let map, tiles, mapReady=false, pendingRender=false;
 
-// [offline storage removed for online-first testing]
-const $ = id=>document.getElementById(id);
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
-function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicio:null, fotoFin:null};}
-let step=1; const sheet=$('sheet');
-function openSheet(){sheet.classList.add('open');}
-function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false); clearTempMarkers();}
+// -------- Utilidad UI --------
+const $ = (id)=>document.getElementById(id);
 function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
-function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
 function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
 function hideBlocker(){$('blocker').style.display='none'}
-function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 
+// -------- Estado --------
+let map, tiles, mapReady=false, pendingRender=false;
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, _objUrls:new Map() };
+function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
+let step=1; const sheet=$('sheet');
+function openSheet(){sheet.classList.add('open');}
+function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false); clearTempMarkers();}
+function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
 
-function clearTempMarkers(){
-  try {
-    if (state.mkInicioTemp){
-      try { removeLayer(state.mkInicioTemp); } catch(_) { try{ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); }catch(_){ } }
-      state.mkInicioTemp = null;
-    }
-    if (state.mkFinTemp){
-      try { removeLayer(state.mkFinTemp); } catch(_) { try{ state.mkFinTemp.remove && state.mkFinTemp.remove(); }catch(_){ } }
-      state.mkFinTemp = null;
-    }
-  } catch (e) {
-    console.warn('No se pudo limpiar marcadores temporales', e);
-  }
-}
-function updatePendingUI(){
-  const b = document.getElementById('pendingBadge');
-  const ban = document.getElementById('pendingBanner');
-  if (b) b.style.display='none';
-  if (ban) ban.style.display='none';
-}
-
-
+// -------- Imagen: compresión a JPEG --------
 async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
 async function imageToBlob(file){
   const bmp = await readImageBitmap(file);
@@ -216,218 +179,222 @@ async function imageToBlob(file){
     if (c.convertToBlob) return await c.convertToBlob({ type: t, quality: q });
     return await new Promise(r => c.toBlob(r, t, q));
   }
-  // Always JPEG for server compatibility
   return await toBlob(canvas, 'image/jpeg', IMG_QUALITY);
 }
 function blobUrl(b){return URL.createObjectURL(b)}
 async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
 
+// -------- GPS --------
 function getGPS(){return new Promise((res,rej)=>{ if(!navigator.geolocation) return rej(new Error('Geolocalización no disponible')); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,ts:Date.now()}), err=>rej(err), {enableHighAccuracy:true, timeout:10000, maximumAge:0}); });}
 
+// -------- Mapa --------
+function whenLeafletReady(cb){
+  if (window.L) return cb();
+  const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
+  window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
+}
 function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
 whenLeafletReady(()=>{ initMapOnce(); });
 
-async function fetchAllFromServer(){ if(!APPS_SCRIPT_URL) return []; const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all'; const r=await fetch(url,{method:'GET'}); if(!r.ok) throw new Error('HTTP '+r.status); const data=await r.json(); const rows=Array.isArray(data.records)?data.records:[]; return rows.map(r=>{const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number); const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null; const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null; return {id:r.id,sector:r.sector||'',subestacion:r.subestacion||'',circuito:r.circuito||'',tipo:r.tipo||'Apertura',inicio:ini,fin:fin,fotoInicioUrl:r.fotoInicioUrl||'',fotoFinUrl:r.fotoFinUrl||'',synced:true,createdAt:r.createdAt||new Date().toISOString()};});}
-function normalizePoint(p){ if(!p) return null; if(typeof p==='string'){ const a=p.split(',').map(Number); if(a.length===2 && !isNaN(a[0]) && !isNaN(a[1])) return {lat:a[0],lng:a[1]}; return null;} if(typeof p.lat==='number' && typeof p.lng==='number') return p; return null; }
-function normalizeItem(it){ return { ...it, inicio: normalizePoint(it.inicio), fin: normalizePoint(it.fin) }; }
-
-async function bootstrap(){
-  showBlocker('Cargando datos…');
-  try {
-    const server = await fetchAllFromServer();
-    state.items = (server || []).map(normalizeItem);
-  } catch (e) {
-    state.items = [];
-    toast('⚠️ Error al conectar con el servidor.');
-    console.warn(e);
-  } finally {
-    hideBlocker();
-    if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
-  }
+// -------- Server I/O --------
+async function fetchAllFromServer(){
+  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all';
+  const r=await fetch(url,{method:'GET'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const data=await r.json();
+  const rows=Array.isArray(data.records)?data.records:[];
+  return rows.map(r=>{
+    const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number);
+    const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null;
+    const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null;
+    return {
+      id:r.id,
+      sector:r.sector||'',
+      subestacion:r.subestacion||'',
+      circuito:r.circuito||'',
+      tipo:r.tipo||'Apertura',
+      inicio:ini,
+      fin:fin,
+      fotoInicioUrl:r.fotoInicioUrl||'',
+      fotoFinUrl:r.fotoFinUrl||'',
+      createdAt:r.createdAt||new Date().toISOString()
+    };
+  });
 }
-bootstrap();
 
+async function syncOneToServer(it){
+  const payload = { records: [it] };
+  const r = await fetch(APPS_SCRIPT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
 
+// -------- Render --------
 function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
 function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
-
-function removeLayer(l){
-  try{
-    if (!l) return;
-    if (l.remove) { l.remove(); return; }              // Leaflet layers have .remove()
-    if (typeof map !== 'undefined' && map && map.removeLayer) { map.removeLayer(l); }
-  }catch(e){ console.warn('removeLayer fallo', e); }
-  // además, quita de state.layers si está
-  try{
-    if (state && Array.isArray(state.layers)){
-      const i = state.layers.indexOf(l);
-      if (i >= 0) state.layers.splice(i,1);
-    }
-  }catch(_){}
-}
-function hasValidPoint(p){return !!(p && typeof p.lat==='number' && !isNaN(p.lat) && typeof p.lng==='number' && !isNaN(p.lng));}
-
+function tipoColor(t){return t==='Limpieza'?'#22c55e':'#f97316'}
 
 function toEmbeddableImageUrl(u){
   if (!u) return '';
   try {
     const url = String(u).trim();
-
-    // 1) Data URL passthrough
     if (url.startsWith('data:image')) return url;
-
-    // 2) Already an embeddable Drive URL
     if (/drive\.google\.com\/uc\?/i.test(url)) return url;
-
-    // 3) /file/d/<ID>/(view|preview|edit) with any query params
     let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
     if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
-
-    // 4) ...open?id=<ID>  OR  ...uc?export=download&id=<ID>
     m = url.match(/[?&]id=([^&]+)/i);
     if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
-
-    // 5) Fallback for any http(s): return as-is (CDN/S3/etc.)
-    if (/^https?:\/\//i.test(url)) return url;
-
     return url;
-  } catch (_){
-    return u;
-  }
+  } catch { return u; }
 }
 
-function getPhotoSrc(it, which){
-  const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
-  const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
-
-  // Helper: normalize a potential string into a usable image src
-  const normalize = (s)=>{
-    if (!s) return '';
-    const str = String(s).trim();
-    // Already a data URL
-    if (str.startsWith('data:image')) return str;
-    // Looks like http(s) or protocol-relative
-    if (/^https?:\/\//i.test(str) || /^\/\//.test(str) || str.startsWith('/')) return str;
-    // Looks like raw base64 (no header). Heuristic: long, base64 charset
-    if (/^[A-Za-z0-9+/=\s]+$/.test(str) && str.replace(/\s+/g,'').length > 100) {
-      return 'data:image/jpeg;base64,' + str.replace(/\s+/g,'');
-    }
-    return '';
-  };
-
-  // 1) If we have a remote URL (or dataURL-like string), use it
-  const u = it[urlKey];
-  const uNorm = normalize(u);
-  if (uNorm) return toEmbeddableImageUrl(uNorm);
-
-  // 2) If we have a Blob, create/reuse object URL
-  const b = it[blobKey];
-  if (b instanceof Blob) {
-    try {
-      const key = it.id + ':' + blobKey;
-      state._objUrls = state._objUrls || new Map();
-      if (!state._objUrls.has(key)) state._objUrls.set(key, URL.createObjectURL(b));
-      return state._objUrls.get(key);
-    } catch (e) { console.warn('No se pudo crear ObjectURL', e); }
-  }
-
-  // 3) If we have a string value that might be base64, normalize
-  if (typeof b === 'string') {
-    const bNorm = normalize(b);
-    if (bNorm) return bNorm;
-  }
-
-  return '';
-}
-
-function photoForPopup(it, which){
-  const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
-  const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
-  const v = it[blobKey];
-  // Prefer exact previous behavior: direct string (Data URL) if present
-  if (typeof v === 'string' && v.trim()) return toEmbeddableImageUrl(v.trim());
-  // If it's a Blob, create/reuse object URL
-  if (v instanceof Blob){
-    try{
-      state._objUrls = state._objUrls || new Map();
-      const key = (it.id||'tmp') + ':' + blobKey;
-      if (!state._objUrls.has(key)) state._objUrls.set(key, URL.createObjectURL(v));
-      return state._objUrls.get(key);
-    }catch(e){ console.warn('photoForPopup: ObjectURL error', e); }
-  }
-  // Finally, fall back to explicit URL field if it's a string
-  const u = it[urlKey];
+function getPhotoSrcFromUrls(it, which){
+  const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
+  const u = it[key];
   if (typeof u === 'string' && u.trim()) return toEmbeddableImageUrl(u.trim());
   return '';
 }
-function markerPopupHtml(p,t,f,m){ const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas'; const img=f?`<img class="popup-img" loading="lazy" src="${f}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>'; return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`; }
-function drawItem(it,fit=false){ if(!hasValidPoint(it.inicio) || !hasValidPoint(it.fin)) return; const col=tipoColor(it.tipo); const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95}); const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95}); const fIni = photoForPopup(it,'inicio');
-const fFin = photoForPopup(it,'fin'); mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`)); addLayer(line); addLayer(mkIni); addLayer(mkFin); if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));} }
-function renderAllIncremental(){ if(!map) return; clearMapLayers(); const items=[...state.items]; let i=0; function chunk(){ const start=performance.now(); while(i<items.length && (performance.now()-start)<8){ drawItem(items[i++], false);} if(i<items.length) requestIdleCallback(chunk,{timeout:60}); } requestIdleCallback(chunk,{timeout:60}); }
 
-function clearWizard(resetAll=true){ if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicio=null;state.actual.fotoFin=null} $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura'; $('fotoInicio').value='';$('fotoFin').value='';$('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');$('previewInicio').src='';$('previewFin').src='';}
-function validateStep1(){ const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim(); if(!sector||!sub||!circ) return false; Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value}); return true; }
-async function validateStep2(){ if(!state.actual.inicio){try{await capInicio()}catch(_){}} const f=$('fotoInicio').files[0]; if(!state.actual.inicio||!f) return false; const b=await imageToBlob(f); state.actual.fotoInicio=b; $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); return true; }
-async function validateStep3(){ if(!state.actual.fin){try{await capFin()}catch(_){}} const f=$('fotoFin').files[0]; if(!state.actual.fin||!f) return false; const b=await imageToBlob(f); state.actual.fotoFin=b; $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); return true; }
-function fillResumen(){ const it=state.actual, col=tipoColor(it.tipo); const ini=hasValidPoint(it.inicio)?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-'; const fin=hasValidPoint(it.fin)?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-'; $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`; }
-
-async function capInicio(){
- if (state.mkInicioTemp){ try{ removeLayer(state.mkInicioTemp); }catch(_){} state.mkInicioTemp=null; }
- const p=await getGPS(); state.actual.inicio=p; if(state.mkInicioTemp){try{map && map.removeLayer(state.mkInicioTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup(); }
-async function capFin(){
- if (state.mkFinTemp){ try{ removeLayer(state.mkFinTemp); }catch(_){} state.mkFinTemp=null; }
- const p=await getGPS(); state.actual.fin=p; if(state.mkFinTemp){try{map && map.removeLayer(state.mkFinTemp)}catch(_){}} const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final'); mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}}); addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup(); }
-
-async function syncToServer(pendientes){ if(!APPS_SCRIPT_URL) return {ok:false,error:'Sin URL'}; const payloadRecords=[]; const skipped=[]; for(const it of pendientes){ if(!hasValidPoint(it.inicio)||!hasValidPoint(it.fin)){ skipped.push(it.id); continue; } const rec={...it}; if(it.fotoInicio && it.fotoInicio instanceof Blob){ rec.fotoInicio = await blobToDataURL(it.fotoInicio); } if(it.fotoFin && it.fotoFin instanceof Blob){ rec.fotoFin = await blobToDataURL(it.fotoFin); } rec.inicio = { lat: it.inicio.lat, lng: it.inicio.lng }; rec.fin = { lat: it.fin.lat, lng: it.fin.lng }; payloadRecords.push(rec);} const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),45000); const r=await fetch(APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:payloadRecords}),signal:controller.signal}); clearTimeout(t); if(!r.ok) throw new Error('HTTP '+r.status); const resp=await r.json(); resp.skippedIds=skipped; return resp; }
-async function syncPending(){
-  showBlocker('Sincronizando…');
-  try {
-    const data = await fetchAllFromServer();
-    state.items = (data || []).map(normalizeItem);
-    if (mapReady) { renderAllIncremental(); }
-    toast('✅ Datos actualizados');
-  } catch (e) {
-    console.warn(e);
-    toast('❌ Error al sincronizar');
-  } finally {
-    hideBlocker();
-  }
+function markerPopupHtml(p,t,src,m){
+  const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
+  const img=src?`<img class="popup-img" loading="lazy" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
+  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`;
 }
 
-$('newTramo').onclick=()=>{openSheet(); setStep(1)}; $('s1-cancel').onclick=closeSheet; $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); }; $('s2-back').onclick=()=>setStep(1); $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); }; $('s3-back').onclick=()=>setStep(2); $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
-document.getElementById('s4-save').onclick = async ()=>{
-  // normaliza fotos a dataURL (como la versión anterior)
-  if (state.actual.fotoInicio instanceof Blob) { try { state.actual.fotoInicio = await blobToDataURL(state.actual.fotoInicio); } catch(_){} }
-  if (state.actual.fotoFin instanceof Blob) { try { state.actual.fotoFin = await blobToDataURL(state.actual.fotoFin); } catch(_){} }
+function drawItem(it,fit=false){
+  if(!(it && it.inicio && it.fin)) return;
+  const col=tipoColor(it.tipo);
+  const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
+  const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
+  const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
+  const fIni = getPhotoSrcFromUrls(it,'inicio');
+  const fFin = getPhotoSrcFromUrls(it,'fin');
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
+  addLayer(line); addLayer(mkIni); addLayer(mkFin);
+  if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
+}
 
-  if (!hasValidPoint(state.actual.inicio) || !hasValidPoint(state.actual.fin)){
-    toast('Faltan coordenadas válidas de inicio/fin.');
-    return;
+function renderAllIncremental(){
+  if(!map) return;
+  clearMapLayers();
+  const items=[...state.items];
+  let i=0;
+  function chunk(){
+    const start=performance.now();
+    while(i<items.length && (performance.now()-start)<8){
+      drawItem(items[i++], false);
+    }
+    if(i<items.length) requestIdleCallback(chunk,{timeout:60});
+  }
+  requestIdleCallback(chunk,{timeout:60});
+}
+
+// -------- Wizard --------
+function clearWizard(resetAll=true){
+  if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicioFile=null;state.actual.fotoFinFile=null}
+  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura';
+  $('fotoInicio').value='';$('fotoFin').value='';
+  $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
+  $('previewInicio').src='';$('previewFin').src='';
+}
+function validateStep1(){
+  const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
+  if(!sector||!sub||!circ) return false;
+  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value});
+  return true;
+}
+async function validateStep2(){
+  if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
+  const f=$('fotoInicio').files[0];
+  if(!state.actual.inicio||!f) return false;
+  state.actual.fotoInicioFile=f;
+  const b=await imageToBlob(f);
+  $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+  return true;
+}
+async function validateStep3(){
+  if(!state.actual.fin){try{await capFin()}catch(_){}} 
+  const f=$('fotoFin').files[0];
+  if(!state.actual.fin||!f) return false;
+  state.actual.fotoFinFile=f;
+  const b=await imageToBlob(f);
+  $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+  return true;
+}
+function fillResumen(){
+  const it=state.actual, col=tipoColor(it.tipo);
+  const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
+  const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
+  $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
+}
+
+// -------- Captura de puntos --------
+async function capInicio(){
+  const p=await getGPS(); state.actual.inicio=p;
+  if(state.mkInicioTemp){ try{ map && map.removeLayer(state.mkInicioTemp); }catch(_){ } }
+  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio');
+  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
+  addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup();
+}
+async function capFin(){
+  const p=await getGPS(); state.actual.fin=p;
+  if(state.mkFinTemp){ try{ map && map.removeLayer(state.mkFinTemp); }catch(_){ } }
+  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final');
+  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
+  addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup();
+}
+function clearTempMarkers(){
+  try { if(state.mkInicioTemp){ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); state.mkInicioTemp=null; } } catch(_){}
+  try { if(state.mkFinTemp){ state.mkFinTemp.remove && state.mkFinTemp.remove(); state.mkFinTemp=null; } } catch(_){}
+}
+
+// -------- Guardado --------
+document.getElementById('s4-save').onclick = async ()=>{
+  if (!(state.actual.inicio && state.actual.fin)){
+    toast('Faltan coordenadas válidas de inicio/fin.'); return;
   }
   showBlocker('Guardando…');
-  const it = {
-    id: crypto.randomUUID(),
-    sector: state.actual.sector,
-    subestacion: state.actual.subestacion,
-    circuito: state.actual.circuito,
-    tipo: state.actual.tipo,
-    inicio: state.actual.inicio,
-    fin: state.actual.fin,
-    fotoInicio: state.actual.fotoInicio,
-    fotoFin: state.actual.fotoFin,
-    createdAt: new Date().toISOString(),
-    synced: true
-  };
+
   try {
-    const resp = await syncToServer([it]);
+    // Convertimos a dataURL para POST (server guardará en Drive y devolverá URL)
+    const fotoInicioBlob = await imageToBlob(state.actual.fotoInicioFile);
+    const fotoFinBlob   = await imageToBlob(state.actual.fotoFinFile);
+    const fotoInicioB64 = await blobToDataURL(fotoInicioBlob);
+    const fotoFinB64    = await blobToDataURL(fotoFinBlob);
+
+    const it = {
+      id: crypto.randomUUID(),
+      sector: state.actual.sector,
+      subestacion: state.actual.subestacion,
+      circuito: state.actual.circuito,
+      tipo: state.actual.tipo,
+      inicio: state.actual.inicio,
+      fin: state.actual.fin,
+      fotoInicio: fotoInicioB64,
+      fotoFin: fotoFinB64,
+      createdAt: new Date().toISOString()
+    };
+
+    const resp = await syncOneToServer(it);
     const okIds = new Set([...(resp.syncedIds||[]), ...(resp.alreadySyncedIds||[])]);
     const urlMap = resp.urlMap || {};
+
     if (okIds.has(it.id)) {
+      // Reemplaza campos de fotos por URLs (Drive)
       it.fotoInicioUrl = (urlMap[it.id]||{}).inicio || '';
       it.fotoFinUrl = (urlMap[it.id]||{}).fin || '';
+      // Limpia blobs locales
+      delete it.fotoInicio; delete it.fotoFin;
+      delete it.fotoInicioFile; delete it.fotoFinFile;
+
       state.items.push(it);
-      if (mapReady){ drawItem(it,true); }
-          clearTempMarkers();
+      drawItem(it, true);
+      clearTempMarkers();
       closeSheet();
       toast('✅ Guardado en servidor');
     } else {
@@ -435,26 +402,55 @@ document.getElementById('s4-save').onclick = async ()=>{
     }
   } catch (e) {
     console.warn(e);
-    toast('❌ Error al guardar en servidor');
+    toast('❌ Error al guardar');
   } finally {
     hideBlocker();
   }
 };
 
-$('cap-inicio').onclick=async ()=>{try{await capInicio(); toast('Punto inicial capturado');}catch(_){toast('No se pudo obtener ubicación')}};
-$('cap-fin').onclick=async ()=>{try{await capFin(); toast('Punto final capturado');}catch(_){toast('No se pudo obtener ubicación')}};
-$('fotoInicio').addEventListener('change', async e=>{ if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); state.actual.fotoInicio=b; }});
-$('fotoFin').addEventListener('change', async e=>{ if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); state.actual.fotoFin=b; }});
-$('syncBtn').addEventListener('click', syncPending);
+// -------- Eventos UI --------
+$('newTramo').onclick=()=>{openSheet(); setStep(1)};
+$('s1-cancel').onclick=closeSheet;
+$('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
+$('s2-back').onclick=()=>setStep(1);
+$('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial y selecciona una foto.'); return;} setStep(3); };
+$('s3-back').onclick=()=>setStep(2);
+$('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final y selecciona una foto.'); return;} fillResumen(); setStep(4); };
 
-document.addEventListener('click', e=>{const el=e.target; if(el && el.classList && el.classList.contains('preview')){ try{ window.open(el.src,'_blank'); }catch(_){}}});
-window.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && map){ setTimeout(()=>map.invalidateSize(),150); } }, {passive:true});
+$('fotoInicio').addEventListener('change', async e=>{
+  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); }
+});
+$('fotoFin').addEventListener('change', async e=>{
+  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); }
+});
 
-try{$('s1-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s2-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s3-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
-try{$('s4-cancel').onclick=()=>{ closeSheet(); };}catch(_){}
+$('syncBtn').addEventListener('click', async ()=>{
+  showBlocker('Actualizando…');
+  try {
+    state.items = (await fetchAllFromServer());
+    if (mapReady) renderAllIncremental();
+    toast('✅ Datos actualizados');
+  } catch (e) {
+    console.warn(e); toast('❌ Error al actualizar');
+  } finally {
+    hideBlocker();
+  }
+});
 
+// -------- Bootstrap --------
+(async function bootstrap(){
+  showBlocker('Cargando datos…');
+  try {
+    state.items = (await fetchAllFromServer());
+  } catch (e) {
+    console.warn(e);
+    state.items = [];
+    toast('⚠️ Error al conectar con el servidor');
+  } finally {
+    hideBlocker();
+    if (mapReady) { renderAllIncremental(); } else { pendingRender = true; }
+  }
+})();
 </script>
 </body>
 </html>
