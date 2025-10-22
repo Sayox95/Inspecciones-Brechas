@@ -261,7 +261,7 @@ function getPhotoSrcFromUrls(it, which){
 
 function markerPopupHtml(p,t,src,m){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
-  const img=src?`<img class="popup-img" loading="lazy" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
+  const img=src?`<img class="popup-img" src="${src}" alt="foto" referrerpolicy="no-referrer" crossorigin="anonymous"/>`:'<div class="popup-meta">Sin foto</div>';
   return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}</div>`;
 }
 
@@ -271,8 +271,8 @@ function drawItem(it,fit=false){
   const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
   const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const fIni = getPhotoSrcFromUrls(it,'inicio');
-  const fFin = getPhotoSrcFromUrls(it,'fin');
+  const fIni = getPhotoSrcFromUrls(it,'inicio'); console.debug('popup src inicio', fIni, it.fotoInicioUrl);
+  const fFin = getPhotoSrcFromUrls(it,'fin'); console.debug('popup src fin', fFin, it.fotoFinUrl);
   mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
