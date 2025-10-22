@@ -273,29 +273,29 @@ function toEmbeddableImageUrl(u){
   try {
     const url = String(u).trim();
 
-    // 1) Already a data URL
+    // 1) Data URL passthrough
     if (url.startsWith('data:image')) return url;
 
     // 2) Already an embeddable Drive URL
-    if (/drive\.google\.com\/uc\?/.test(url)) return url;
+    if (/drive\.google\.com\/uc\?/i.test(url)) return url;
 
-    // 3) Pattern: /file/d/<ID>/view[?...]
+    // 3) /file/d/<ID>/(view|preview|edit) with any query params
     let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
     if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
 
-    // 4) Pattern: ...open?id=<ID> OR ...uc?export=download&id=<ID>
+    // 4) ...open?id=<ID>  OR  ...uc?export=download&id=<ID>
     m = url.match(/[?&]id=([^&]+)/i);
     if (m && m[1]) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
 
-    // 5) For non-Drive http(s) URLs, use as-is (CDN/S3/etc.)
+    // 5) Fallback for any http(s): return as-is (CDN/S3/etc.)
     if (/^https?:\/\//i.test(url)) return url;
 
-    // 6) Fallback: return unchanged
     return url;
-  } catch (_) {
+  } catch (_){
     return u;
   }
 }
+
 function getPhotoSrc(it, which){
   const urlKey = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
   const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
@@ -345,7 +345,7 @@ function photoForPopup(it, which){
   const blobKey = which==='inicio' ? 'fotoInicio' : 'fotoFin';
   const v = it[blobKey];
   // Prefer exact previous behavior: direct string (Data URL) if present
-  if (typeof v === 'string' && v.trim()) return v.trim();
+  if (typeof v === 'string' && v.trim()) return toEmbeddableImageUrl(v.trim());
   // If it's a Blob, create/reuse object URL
   if (v instanceof Blob){
     try{
