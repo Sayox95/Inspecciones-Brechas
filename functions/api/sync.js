@@ -14,33 +14,58 @@ export async function onRequestOptions({ request }) {
 }
 
 function getUpstream(env) {
+  // Usa tu var de entorno si la tienes (rename si prefieres)
   return env?.APPS_SCRIPT_POST_URL
     || 'https://script.google.com/macros/s/AKfycby1FnajlCXUifEGlaqSwLZ4Q9LfVoVH8dWcSzL0_S2x4EFWPD5cygXikqsMm8Yhbr9TuA/exec';
 }
 
 export async function onRequestGet({ request, env }) {
   const origin = request.headers.get('Origin') || '*';
-  const upstream = getUpstream(env);
 
   try {
     const url = new URL(request.url);
+    const mode = url.searchParams.get('mode');
+    const id   = url.searchParams.get('id');
+
+    // ===== Proxy directo de imagen (evita CORS y binarios de GAS) =====
+    if (mode === 'img' && id) {
+      const driveUrl = `https://drive.google.com/uc?export=view&id=${encodeURIComponent(id)}`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+
+      const resp = await fetch(driveUrl, { signal: controller.signal });
+
+      clearTimeout(timer);
+
+      const ct = resp.headers.get('content-type') || 'application/octet-stream';
+      return new Response(resp.body, {
+        status: resp.status,
+        headers: {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Range',
+          'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+          'Vary': 'Origin',
+          'Content-Type': ct,
+          'Cache-Control': 'no-store'
+        }
+      });
+    }
+
+    // ===== Proxy normal hacia Apps Script =====
+    const upstream = getUpstream(env);
     const qs = url.search || '';
 
     const controller = new AbortController();
-    const timeoutMs = 45000;
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), 45000);
 
-    const resp = await fetch(upstream + qs, {
-      method: 'GET',
-      signal: controller.signal
-    });
+    const resp = await fetch(upstream + qs, { method: 'GET', signal: controller.signal });
 
     clearTimeout(timer);
 
-    // NO conviertas a text(): rompe binarios (imágenes)
-    // Usa el stream tal cual (resp.body) y copia el Content-Type original
+    // Reenvía en streaming para soportar binarios (no usar .text())
     const ct = resp.headers.get('content-type') || 'application/octet-stream';
-
     return new Response(resp.body, {
       status: resp.status,
       headers: {
@@ -54,7 +79,7 @@ export async function onRequestGet({ request, env }) {
       }
     });
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: 'No se pudo obtener datos de Apps Script' }), {
+    return new Response(JSON.stringify({ ok: false, error: 'No se pudo obtener datos (GET)' }), {
       status: 502,
       headers: {
         'Access-Control-Allow-Origin': origin,
@@ -71,13 +96,14 @@ export async function onRequestGet({ request, env }) {
 
 export async function onRequestPost({ request, env }) {
   const origin = request.headers.get('Origin') || '*';
-  const bodyText = await request.text();
   const upstream = getUpstream(env);
 
   try {
+    // Leemos como texto para no romper base64
+    const bodyText = await request.text();
+
     const controller = new AbortController();
-    const timeoutMs = 45000;
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), 45000);
 
     const upstreamResp = await fetch(upstream, {
       method: 'POST',
@@ -88,9 +114,8 @@ export async function onRequestPost({ request, env }) {
 
     clearTimeout(timer);
 
-    // Igual que en GET: no lo conviertas a texto; respeta el tipo original
+    // Devuelve stream del upstream (no convertir a .text())
     const ct = upstreamResp.headers.get('content-type') || 'application/json';
-
     return new Response(upstreamResp.body, {
       status: upstreamResp.status,
       headers: {
