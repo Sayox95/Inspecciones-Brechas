@@ -16,7 +16,7 @@ export async function onRequestOptions({ request }) {
 function getUpstream(env) {
   // Usa tu var de entorno si la tienes (rename si prefieres)
   return env?.APPS_SCRIPT_POST_URL
-    || 'https://script.google.com/macros/s/AKfycbzHhAyyncUYBDhK2JFxVjUsmULD1M67xHx3BPdtNiq6qW68lkY6YG1yFHKjgwqjKaRjww/exec';
+    || 'https://script.google.com/macros/s/AKfycbyl7Ony5vOZ7fZVmv0-GCqHnXWuTTSaJMvCXpY5CavtuIG-7DoRHNJinc8HWqWqEExHQQ/exec';
 }
 
 export async function onRequestGet({ request, env }) {
