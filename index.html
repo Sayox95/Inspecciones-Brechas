@@ -284,7 +284,7 @@ function getPhotoSrcFromUrls(it, which){
 function markerPopupHtml(p,t,src,m,id){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
   const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
-  const actions = id ? `<div class="popup-actions" style="margin-top:8px;display:flex;gap:6px;"><button class="btn btn-ghost" data-act="edit" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">✏️ Editar</button><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p && p.lat}" data-lng="${p && p.lng}">🗑️ Eliminar</button></div>`:'';
+  const actions = id ? `<div style="margin-top:8px"><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p&&p.lat}" data-lng="${p&&p.lng}">🗑️ Eliminar</button></div>`:'';
   return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
 }
 
@@ -333,29 +333,29 @@ function validateStep1(){
 }
 async function validateStep2(){
   if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
-  const f=$('fotoInicio').files && $('fotoInicio').files[0];
-  if(!state.actual.inicio) return false;
+  const f = $('fotoInicio').files && $('fotoInicio').files[0];
+  if(!state.actual.inicio) return false; // foto opcional
   if (f){
-    state.actual.fotoInicioFile=f;
-    const b=await imageToBlob(f);
-    $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
+    state.actual.fotoInicioFile = f;
+    const b = await imageToBlob(f);
+    $('previewInicio').src = blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
   } else {
-    state.actual.fotoInicioFile=null;
-    $('previewInicio').src=''; $('previewInicioWrap').classList.add('hidden');
+    state.actual.fotoInicioFile = null;
+    $('previewInicio').src = ''; $('previewInicioWrap').classList.add('hidden');
   }
   return true;
 }
 async function validateStep3(){
   if(!state.actual.fin){try{await capFin()}catch(_){}} 
-  const f=$('fotoFin').files && $('fotoFin').files[0];
-  if(!state.actual.fin) return false;
+  const f = $('fotoFin').files && $('fotoFin').files[0];
+  if(!state.actual.fin) return false; // foto opcional
   if (f){
-    state.actual.fotoFinFile=f;
-    const b=await imageToBlob(f);
-    $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden');
+    state.actual.fotoFinFile = f;
+    const b = await imageToBlob(f);
+    $('previewFin').src = blobUrl(b); $('previewFinWrap').classList.remove('hidden');
   } else {
-    state.actual.fotoFinFile=null;
-    $('previewFin').src=''; $('previewFinWrap').classList.add('hidden');
+    state.actual.fotoFinFile = null;
+    $('previewFin').src = ''; $('previewFinWrap').classList.add('hidden');
   }
   return true;
 }
@@ -407,23 +407,7 @@ function setBtnLoading(btn, loading, label){
 
 
 
-// --- Edición y borrado desde popups ---
-function startEdit(it){
-  openSheet(); setStep(1);
-  // Pre-carga selects y tipo
-  $('sector').value = it.sector || '';
-  $('subestacion').value = it.subestacion || '';
-  $('circuito').value = it.circuito || '';
-  $('tipo').value = it.tipo || 'Apertura';
-  state.actual = JSON.parse(JSON.stringify(it)); // clona para edición
-
-  // Previews según URLs (si existen)
-  if (it.fotoInicioUrl) { $('previewInicio').src = toProxyImg(it.fotoInicioUrl); $('previewInicioWrap').classList.remove('hidden'); }
-  else { $('previewInicio').src=''; $('previewInicioWrap').classList.add('hidden'); }
-  if (it.fotoFinUrl) { $('previewFin').src = toProxyImg(it.fotoFinUrl); $('previewFinWrap').classList.remove('hidden'); }
-  else { $('previewFin').src=''; $('previewFinWrap').classList.add('hidden'); }
-}
-
+// --- Eliminar por ID (servidor) ---
 async function deleteById(id){
   const r = await fetch(APPS_SCRIPT_URL, {
     method:'POST',
@@ -434,9 +418,42 @@ async function deleteById(id){
   const data = await r.json();
   if (!data.ok) throw new Error(data.error||'delete failed');
   // quitar del estado y re-render
-  state.items = state.items.filter(x=>x.id!==id);
-  clearMapLayers(); renderAllIncremental();
+  state.items = state.items.filter(x=>String(x.id).trim()!==String(id).trim());
+  clearMapLayers();
+  renderAllIncremental();
+  toast('🗑️ Tramo eliminado');
 }
+
+// Delegación global: solo Delete
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('.leaflet-popup [data-act="delete"]');
+  if (!btn) return;
+  let id  = (btn.getAttribute('data-id') || '').trim();
+  const lat = parseFloat(btn.getAttribute('data-lat')||'');
+  const lng = parseFloat(btn.getAttribute('data-lng')||'');
+  if (id === '' || id === 'undefined' || id === 'null') {
+    // Resolver por coordenadas si el id no vino
+    const eps = 1e-7;
+    const itA = state.items.find(x => x.inicio && Math.abs(x.inicio.lat-lat)<eps && Math.abs(x.inicio.lng-lng)<eps);
+    const itB = state.items.find(x => x.fin && Math.abs(x.fin.lat-lat)<eps && Math.abs(x.fin.lng-lng)<eps);
+    const it = itA || itB;
+    if (it && it.id) id = String(it.id);
+  }
+  if (!id) { alert('No se pudo determinar el ID a eliminar.'); return; }
+  if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
+  // feedback visual
+  const original = btn.textContent;
+  btn.textContent = 'Eliminando…';
+  btn.disabled = true;
+  try{
+    await deleteById(id);
+  }catch(e){
+    console.warn(e); alert('No se pudo eliminar');
+  }finally{
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
 
 // -------- Guardado --------
 document.getElementById('s4-save').onclick = async ()=>{
@@ -448,10 +465,10 @@ document.getElementById('s4-save').onclick = async ()=>{
   try {
     // Convertimos a dataURL para POST (server guardará en Drive y devolverá URL)
     const fotoInicioB64 = state.actual.fotoInicioFile ? await blobToDataURL(await imageToBlob(state.actual.fotoInicioFile)) : '';
-const fotoFinB64    = state.actual.fotoFinFile   ? await blobToDataURL(await imageToBlob(state.actual.fotoFinFile))   : '';
+    const fotoFinB64    = state.actual.fotoFinFile   ? await blobToDataURL(await imageToBlob(state.actual.fotoFinFile))   : '';
 
     const it = {
-      id: (state.actual.id || (crypto.randomUUID && crypto.randomUUID()) || String(Date.now())),
+      id: crypto.randomUUID(),
       sector: state.actual.sector,
       subestacion: state.actual.subestacion,
       circuito: state.actual.circuito,
@@ -475,9 +492,8 @@ const fotoFinB64    = state.actual.fotoFinFile   ? await blobToDataURL(await ima
       delete it.fotoInicio; delete it.fotoFin;
       delete it.fotoInicioFile; delete it.fotoFinFile;
 
-      const idx = state.items.findIndex(x=>x.id===it.id);
-      if (idx>=0){ state.items[idx]=it; clearMapLayers(); renderAllIncremental(); }
-      else { state.items.push(it); drawItem(it, true); }
+      state.items.push(it);
+      drawItem(it, true);
       clearTempMarkers();
       closeSheet();
       toast('✅ Guardado en servidor');
@@ -772,62 +788,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   initCascadingSelects();
 });
 
-</script>
-
-<script>
-// Delegación global robusta para botones en popups
-document.addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('.leaflet-popup [data-act]');
-  if (!btn) return;
-  const act = (btn.getAttribute('data-act') || '').trim();
-  let id  = (btn.getAttribute('data-id') || '').trim();
-  const lat = parseFloat(btn.getAttribute('data-lat')||'');
-  const lng = parseFloat(btn.getAttribute('data-lng')||'');
-
-  if (id === '' || id === 'undefined' || id === 'null') id = '';
-
-  function resolveItem(){
-    if (!window.state || !Array.isArray(state.items)) return null;
-    if (id) {
-      const byId = state.items.find(x => String(x.id||'').trim() === id);
-      if (byId) return byId;
-    }
-    if (!isNaN(lat) && !isNaN(lng)) {
-      const eps = 1e-7;
-      let it = state.items.find(x => x.inicio && Math.abs(x.inicio.lat - lat) < eps && Math.abs(x.inicio.lng - lng) < eps);
-      if (it) return it;
-      it = state.items.find(x => x.fin && Math.abs(x.fin.lat - lat) < eps && Math.abs(x.fin.lng - lng) < eps);
-      if (it) return it;
-    }
-    return null;
-  }
-
-  if (btn.dataset.loading === '1') return;
-  btn.dataset.loading = '1';
-  const original = btn.textContent;
-
-  try {
-    const it = resolveItem();
-    if (act === 'edit') {
-      if (!it) { alert('No se encontró el tramo para editar.'); return; }
-      if (!id && it.id) btn.setAttribute('data-id', String(it.id));
-      btn.textContent = 'Abriendo…';
-      if (typeof startEdit === 'function') startEdit(it);
-    } else if (act === 'delete') {
-      if (!confirm('¿Eliminar este tramo? Esta acción no se puede deshacer.')) return;
-      btn.textContent = 'Eliminando…';
-      const targetId = id || (it && it.id);
-      if (!targetId) { alert('No se pudo determinar el ID a eliminar.'); return; }
-      if (typeof deleteById === 'function') await deleteById(targetId);
-    }
-  } catch (e) {
-    console.warn(e);
-    alert('Ocurrió un error al procesar la acción.');
-  } finally {
-    btn.textContent = original;
-    btn.dataset.loading = '';
-  }
-});
 </script>
 </body>
 </html>
