@@ -1,621 +1,145 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <link rel="icon" href="data:,"/>
-  <title>Captura de Brechas — Tramos & Rondas</title>
-
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-:root{
-  --bg:#0b1220;--card:#0f182a;--muted:#8aa0b6;--text:#ecf3ff;--accent:#4cc9f0;
-  --ok:#22c55e;--warn:#f97316;--danger:#ef4444;--border:#1d2a45;--sheet:#0b1220;
-  --ronda:#7c3aed;--radius:16px;--shadow:0 10px 30px rgba(0,0,0,.35)
-}
-*{box-sizing:border-box} html,body{height:100%}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;background:var(--bg);color:var(--text);overflow:hidden;-webkit-tap-highlight-color:transparent}
-header{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:10px;background:rgba(11,18,32,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:12px 14px}
-header h1{margin:0;font-size:16px} header .muted{color:var(--muted);font-size:12px}
-#map{position:absolute;inset:52px 0 0 0;touch-action:manipulation}
-
-.fabs{position:fixed;right:16px;bottom:16px;z-index:1100;display:flex;flex-direction:column;gap:10px}
-.fab{border:0;border-radius:999px;background:var(--accent);color:#051423;padding:14px 16px;font-weight:800;box-shadow:var(--shadow)} 
-.fab:active{transform:translateY(1px)}
-.fab-ronda{background:var(--ronda);color:white}
-
-.sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:2000;background:var(--sheet);border-top-left-radius:20px;border-top-right-radius:20px;border:1px solid var(--border);box-shadow:0 -12px 30px rgba(0,0,0,.45);transition:bottom .28s ease;max-height:82vh;display:flex;flex-direction:column}
-.sheet.open{bottom:0} .sheet .drag{width:56px;height:5px;border-radius:999px;background:#24314f;margin:8px auto} .sheet .content{padding:12px;overflow:auto}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px} .field{display:flex;flex-direction:column;gap:6px} label{font-size:12px;color:var(--muted)}
-input[type="text"],input[type="number"],select,input[type="file"]{width:100%;background:#0e1729;color:var(--text);border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px}
-.btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#183055;color:#e6f0ff;width:100%;font-weight:700}
-.btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff} .btn-danger{background:var(--danger)} 
-.bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:#9fb3c7} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
-.apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
-img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
-.popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
-
-.blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:var(--shadow);text-align:left;font-weight:600}
-.spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
-.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Captura de Brechas</h1>
-    <span class="muted">Móvil • GPS • Fotos (Drive)</span>
-    <div style="margin-left:auto"></div>
-  </header>
-
-  <div id="map"></div>
-
-  <div class="fabs">
-    <button id="newTramo" class="fab">+ Nuevo tramo</button>
-    <button id="newRonda" class="fab fab-ronda">+ Ronda</button>
-  </div>
-
-  <section id="sheet" class="sheet" aria-modal="true" role="dialog">
-    <div class="drag"></div>
-    <div class="content">
-
-      <!-- PASO 1 -->
-      <div id="step-1" class="grid step active">
-        <div class="card">
-          <div class="chips" style="margin-bottom:8px">
-            <span class="chip tramo-only"><span class="color-box apertura"></span>Apertura</span>
-            <span class="chip tramo-only"><span class="color-box limpieza"></span>Limpieza</span>
-            <span id="chipRonda" class="chip hidden"><span class="color-box" style="background:var(--ronda)"></span>Ronda</span>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Sector</label>
-              <select id="sector" disabled><option value="">Cargando sectores…</option></select>
-            </div>
-            <div class="field">
-              <label>Subestación</label>
-              <select id="subestacion" disabled><option value="">Selecciona un sector…</option></select>
-            </div>
-            <div class="field">
-              <label>Circuito</label>
-              <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
-            </div>
-            <div class="field ronda-only hidden">
-              <label>Postes rondados (cantidad)</label>
-              <input id="postesRondados" type="number" min="0" step="1" placeholder="0"/>
-            </div>
-            <div class="field tramo-only">
-              <label>Tipo de brecha</label>
-              <select id="tipo">
-                <option value="">Selecciona…</option>
-                <option value="Apertura">Apertura de brecha</option>
-                <option value="Limpieza">Limpieza de brecha</option>
-              </select>
-            </div>
-            <div class="field tramo-only">
-              <label>Troncal/Ramal</label>
-              <select id="troncalRamal">
-                <option value="">Selecciona…</option>
-                <option value="Troncal">Troncal</option>
-                <option value="Ramal">Ramal</option>
-              </select>
-            </div>
-            <div class="field tramo-only">
-              <label>Terna</label>
-              <select id="terna">
-                <option value="">Selecciona…</option>
-                <option value="Sencilla">Sencilla</option>
-                <option value="Doble">Doble</option>
-                <option value="Triple">Triple</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
-          <div class="bar" style="margin-top:10px">
-            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s1-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- PASO 2 -->
-      <div id="step-2" class="grid step hidden">
-        <div class="card grid">
-          <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto opcional</u>.</div>
-          <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
-          <div class="field">
-            <label>Foto punto inicial (opcional)</label>
-            <input id="fotoInicio" type="file" accept="image/*" capture="environment"/>
-          </div>
-          <div id="previewInicioWrap" class="hidden">
-            <img id="previewInicio" class="preview" alt="Foto inicio"/>
-          </div>
-          <div class="bar">
-            <button id="s2-back" class="btn btn-ghost">Atrás</button>
-            <button id="s2-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- PASO 3 -->
-      <div id="step-3" class="grid step hidden">
-        <div class="card grid">
-          <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto opcional</u>.</div>
-          <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
-          <div class="field">
-            <label>Foto punto final (opcional)</label>
-            <input id="fotoFin" type="file" accept="image/*" capture="environment"/>
-          </div>
-          <div id="previewFinWrap" class="hidden">
-            <img id="previewFin" class="preview" alt="Foto final"/>
-          </div>
-          <div class="bar">
-            <button id="s3-back" class="btn btn-ghost">Atrás</button>
-            <button id="s3-next" class="btn btn-primary">Siguiente</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- PASO 4 -->
-      <div id="step-4" class="grid step hidden">
-        <div class="card grid">
-          <div><strong>Resumen</strong> — revisa y guarda.</div>
-          <div id="resumen" class="grid"></div>
-          <div class="bar">
-            <button id="s4-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s4-save" class="btn btn-ok">Guardar</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <div id="blocker" class="blocker" aria-hidden="true"><div class="box"><span class="spinner"></span><span id="blockerText">Procesando…</span></div></div>
-  <div id="toast" class="toast"></div>
-
-<script>
-// -------- Config --------
-const APPS_SCRIPT_URL = "/api/sync";  // tu proxy a Apps Script
-const IMG_MAX = 1280;
-const IMG_QUALITY = 0.82;
-
-// -------- Utilidad UI --------
-const $ = (id)=>document.getElementById(id);
-function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
-function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
-function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
-function hideBlocker(){$('blocker').style.display='none'}
-
-// -------- Estado --------
-let map, tiles, mapReady=false, pendingRender=false;
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
-function baseActual(){return { mode:'tramo', sector:"", subestacion:"", circuito:"", tipo:"Apertura", troncalRamal:"", terna:"", postesRondados:0, inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
-let step=1; const sheet=$('sheet');
-function openSheet(){sheet.classList.add('open');}
-function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(true); clearTempMarkers();}
-function setStep(n){ ['step-1','step-2','step-3','step-4'].forEach((id,i)=>{ const el=$(id); if(!el) return; el.classList.toggle('hidden',(i+1)!==n); el.classList.toggle('active',(i+1)===n);}); step=n;}
-
-// -------- Imagen util --------
-async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
-async function imageToBlob(file){
-  const bmp = await readImageBitmap(file);
-  const ratio = Math.min(1, IMG_MAX/Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * ratio), h = Math.round(bmp.height * ratio);
-  let canvas;
-  if (typeof OffscreenCanvas !== 'undefined'){ canvas = new OffscreenCanvas(w,h); }
-  else { canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; }
-  const ctx = canvas.getContext('2d', { alpha:false }); ctx.drawImage(bmp, 0, 0, w, h);
-  async function toBlob(c, t, q){ if (c.convertToBlob) return await c.convertToBlob({type:t,quality:q}); return await new Promise(r=>c.toBlob(r,t,q)); }
-  return await toBlob(canvas,'image/jpeg',IMG_QUALITY);
-}
-function blobUrl(b){return URL.createObjectURL(b)}
-async function blobToDataURL(b){return await new Promise(r=>{const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(b);});}
-
-// -------- GPS (con ayuda de permisos; sin botón de recarga) --------
-async function getGPS(){
-  return new Promise((resolve, reject)=>{
-    if(!navigator.geolocation){
-      showLocationHelp("Tu navegador no soporta GPS. Usa Chrome o Edge.");
-      return reject(new Error("No soporta geolocalización"));
+// functions/api/sync.js
+export async function onRequestOptions({ request }) {
+  const origin = request.headers.get('Origin') || '*';
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Range',
+      'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+      'Vary': 'Origin'
     }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({lat:pos.coords.latitude,lng:pos.coords.longitude,ts:Date.now()}),
-      err => {
-        if (err.code === 1){ // PERMISSION_DENIED
-          showLocationHelp("Debes otorgar permiso de ubicación para capturar coordenadas.");
-        } else if (err.code === 2){ // POSITION_UNAVAILABLE
-          toast("No se pudo obtener ubicación (sin señal GPS).");
-        } else if (err.code === 3){ // TIMEOUT
-          toast("Tiempo de espera al obtener ubicación.");
-        } else {
-          toast("Error desconocido de GPS.");
+  });
+}
+
+function getUpstream(env) {
+  // Usa tu var de entorno si la tienes (rename si prefieres)
+  return env?.APPS_SCRIPT_POST_URL
+    || 'https://script.google.com/macros/s/AKfycbwC7R1Z68A4PW7iumhsSta9RChcaF6RhmMQ8bvwH_4CGmNT-JrJPGBMCsrD5ThC5MVlUQ/exec';
+}
+
+export async function onRequestGet({ request, env }) {
+  const origin = request.headers.get('Origin') || '*';
+
+  try {
+    const url = new URL(request.url);
+    const mode = url.searchParams.get('mode');
+    const id   = url.searchParams.get('id');
+
+    // ===== Proxy directo de imagen (evita CORS y binarios de GAS) =====
+    if (mode === 'img' && id) {
+      const driveUrl = `https://drive.google.com/uc?export=view&id=${encodeURIComponent(id)}`;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+
+      const resp = await fetch(driveUrl, { signal: controller.signal });
+
+      clearTimeout(timer);
+
+      const ct = resp.headers.get('content-type') || 'application/octet-stream';
+      return new Response(resp.body, {
+        status: resp.status,
+        headers: {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Range',
+          'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+          'Vary': 'Origin',
+          'Content-Type': ct,
+          'Cache-Control': 'no-store'
         }
-        reject(err);
-      },
-      { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-    );
-  });
-}
-function showLocationHelp(msg){
-  const html = `
-    <div>
-      <strong>${msg}</strong>
-      <hr style="border:1px solid #22355c">
-      <p>Para volver a activar la ubicación:</p>
-      <ul style="padding-left:20px;font-size:13px;line-height:1.4em">
-        <li><b>Android (Chrome):</b> candado 🔒 → <em>Permisos</em> → <b>Ubicación → Permitir</b>.</li>
-        <li><b>iPhone (Safari):</b> Ajustes → Safari → Ubicación → <b>Preguntar o Permitir</b>.</li>
-        <li><b>PC:</b> Candado 🔒 → <b>Permitir ubicación</b>.</li>
-      </ul>
-      <p class="muted">Vuelve a esta pantalla y repite la captura cuando hayas cambiado el permiso.</p>
-    </div>`;
-  showBlocker("Permisos GPS"); document.querySelector("#blocker .box").innerHTML = html;
-}
-
-// -------- Mapa --------
-function whenLeafletReady(cb){ if (window.L) return cb(); const iv=setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } },30); window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } }); }
-function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map);
-  if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});} else {map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
-whenLeafletReady(()=>{ initMapOnce(); });
-
-// -------- Server I/O --------
-async function fetchAllFromServer(){
-  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all';
-  const r=await fetch(url,{method:'GET'});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const data=await r.json();
-  const rows=Array.isArray(data.records)?data.records:[];
-  return rows.map(r=>{
-    const pI=(r.inicio+'').split(',').map(Number), pF=(r.fin+'').split(',').map(Number);
-    const ini=(pI.length===2&&!isNaN(pI[0]))?{lat:pI[0],lng:pI[1]}:null;
-    const fin=(pF.length===2&&!isNaN(pF[0]))?{lat:pF[0],lng:pF[1]}:null;
-    return {
-      id:r.id, mode:r.mode||'tramo',
-      sector:r.sector||'', subestacion:r.subestacion||'', circuito:r.circuito||'',
-      tipo:r.tipo||'', troncalRamal:r.troncalRamal||'', terna:r.terna||'',
-      postesRondados:Number(r.postesRondados||0),
-      inicio:ini, fin:fin,
-      fotoInicioUrl:r.fotoInicioUrl||'', fotoFinUrl:r.fotoFinUrl||'',
-      createdAt:r.createdAt||new Date().toISOString()
-    };
-  });
-}
-
-async function syncOneToServer(it){
-  const payload = { records: [it] };
-  const r = await fetch(APPS_SCRIPT_URL, {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)
-  });
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return await r.json();
-}
-
-function toProxyImg(u){
-  if (!u) return '';
-  try {
-    const s = String(u).trim();
-    if (/^[\w-]{20,}$/.test(s)) return `${APPS_SCRIPT_URL}?mode=img&id=${s}`;
-    let m = s.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
-    m = s.match(/[?&]id=([^&]+)/i);
-    if (m && m[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${m[1]}`;
-    if (/drive\.google\.com\/uc\?/.test(s)){
-      const mid = s.match(/[?&]id=([^&]+)/i);
-      if (mid && mid[1]) return `${APPS_SCRIPT_URL}?mode=img&id=${mid[1]}`;
+      });
     }
-    if (/^https?:\/\//i.test(s)) return s;
-    return s;
-  } catch { return u; }
-}
 
-// -------- Render --------
-function clearMapLayers(){ if(!map) return; state.layers.forEach(l=>{try{map.removeLayer(l)}catch(_){}}); state.layers=[] }
-function addLayer(l){ state.layers.push(l); if(map) l.addTo(map); }
-function tipoColor(it){ if (it.mode==='ronda') return getComputedStyle(document.documentElement).getPropertyValue('--ronda').trim()||'#7c3aed'; return it.tipo==='Limpieza'?'#22c55e':'#f97316'; }
+    // ===== Proxy normal hacia Apps Script =====
+    const upstream = getUpstream(env);
+    const qs = url.search || '';
 
-function getPhotoSrcFromUrls(it, which){
-  const key = which==='inicio' ? 'fotoInicioUrl' : 'fotoFinUrl';
-  const u = it[key];
-  if (typeof u === 'string' && u.trim()) return toProxyImg(u.trim());
-  return '';
-}
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45000);
 
-function markerPopupHtml(p,t,src,m,id){
-  const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
-  const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
-  const actions = id ? `<div style="margin-top:8px"><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p&&p.lat}" data-lng="${p&&p.lng}">🗑️ Eliminar</button></div>`:'';
-  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
-}
+    const resp = await fetch(upstream + qs, { method: 'GET', signal: controller.signal });
 
-function drawItem(it,fit=false){
-  if(!(it && it.inicio && it.fin)) return;
-  const col=tipoColor(it);
-  const line=L.polyline([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]],{color:col,weight:5,opacity:.95});
-  const mkIni=L.circleMarker([it.inicio.lat,it.inicio.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
-  const fIni = getPhotoSrcFromUrls(it,'inicio'); 
-  const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  const titlePrefix = it.mode==='ronda' ? 'RONDA' : it.tipo.toUpperCase();
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito||'(sin circuito)'}`, fIni, `${titlePrefix} • ${it.sector} • ${it.subestacion}`, it.id));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito||'(sin circuito)'}`, fFin, `${titlePrefix} • ${it.sector} • ${it.subestacion}`, it.id));
-  addLayer(line); addLayer(mkIni); addLayer(mkFin);
-  if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
-}
+    clearTimeout(timer);
 
-function renderAllIncremental(){
-  if(!map) return;
-  clearMapLayers();
-  const items=[...state.items];
-  let i=0;
-  function chunk(){
-    const start=performance.now();
-    while(i<items.length && (performance.now()-start)<8){
-      drawItem(items[i++], false);
-    }
-    if(i<items.length) requestIdleCallback(chunk,{timeout:60});
-  }
-  requestIdleCallback(chunk,{timeout:60});
-}
-
-// -------- Wizard --------
-function clearWizard(resetAll=true){
-  if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicioFile=null;state.actual.fotoFinFile=null}
-  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='';$('troncalRamal').value='';$('terna').value='';$('postesRondados').value='';
-  $('fotoInicio').value='';$('fotoFin').value='';
-  $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
-  $('previewInicio').src='';$('previewFin').src='';
-  applyModeUI(state.actual.mode);
-}
-function applyModeUI(mode){
-  const isRonda = mode==='ronda';
-  $('chipRonda').classList.toggle('hidden', !isRonda);
-  document.querySelectorAll('.tramo-only').forEach(el=>el.classList.toggle('hidden', isRonda));
-  document.querySelectorAll('.ronda-only').forEach(el=>el.classList.toggle('hidden', !isRonda));
-}
-function validateStep1(){
-  const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
-  if(state.actual.mode==='ronda'){
-    const cantidad=parseInt(($('postesRondados').value||'').trim(),10);
-    if(!sector||!sub||!circ||!(cantidad>=0)) return false;
-    Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,postesRondados:isNaN(cantidad)?0:cantidad});
-    return true;
-  } else {
-    const tipo=$('tipo').value.trim(), troncalRamal=$('troncalRamal').value.trim(), terna=$('terna').value.trim();
-    if(!sector||!sub||!circ||!tipo||!troncalRamal||!terna) return false;
-    Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo,troncalRamal,terna});
-    return true;
-  }
-}
-async function validateStep2(){
-  if(!state.actual.inicio){try{await capInicio()}catch(_){}} 
-  const f = $('fotoInicio').files && $('fotoInicio').files[0];
-  if(!state.actual.inicio) return false; // foto opcional
-  if (f){
-    state.actual.fotoInicioFile = f;
-    const b = await imageToBlob(f);
-    $('previewInicio').src = blobUrl(b); $('previewInicioWrap').classList.remove('hidden');
-  } else {
-    state.actual.fotoInicioFile = null;
-    $('previewInicio').src = ''; $('previewInicioWrap').classList.add('hidden');
-  }
-  return true;
-}
-async function validateStep3(){
-  if(!state.actual.fin){try{await capFin()}catch(_){}} 
-  const f = $('fotoFin').files && $('fotoFin').files[0];
-  if(!state.actual.fin) return false; // foto opcional
-  if (f){
-    state.actual.fotoFinFile = f;
-    const b = await imageToBlob(f);
-    $('previewFin').src = blobUrl(b); $('previewFinWrap').classList.remove('hidden');
-  } else {
-    state.actual.fotoFinFile = null;
-    $('previewFin').src = ''; $('previewFinWrap').classList.add('hidden');
-  }
-  return true;
-}
-function fillResumen(){
-  const it=state.actual;
-  const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
-  const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
-  if (it.mode==='ronda'){
-    $('resumen').innerHTML=`<div class="grid">
-      <div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito||'-'}</div>
-      <div><b>Postes rondados:</b> ${it.postesRondados}</div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
-  }else{
-    const col=it.tipo==='Limpieza'?'#22c55e':'#f97316';
-    $('resumen').innerHTML=`<div class="grid">
-      <div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div>
-      <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Troncal/Ramal:</b> ${it.troncalRamal}</div><div><b>Terna:</b> ${it.terna}</div>
-      <div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
-  }
-}
-
-// -------- Captura de puntos --------
-async function capInicio(){
-  const p=await getGPS(); state.actual.inicio=p;
-  if(state.mkInicioTemp){ try{ map && map.removeLayer(state.mkInicioTemp); }catch(_){ } }
-  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio');
-  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
-  addLayer(mk); state.mkInicioTemp=mk; if(map) mk.openPopup();
-}
-async function capFin(){
-  const p=await getGPS(); state.actual.fin=p;
-  if(state.mkFinTemp){ try{ map && map.removeLayer(state.mkFinTemp); }catch(_){ } }
-  const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Final (ajustable)'}).bindPopup('Arrastra para ajustar final');
-  mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.fin={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
-  addLayer(mk); state.mkFinTemp=mk; if(map) mk.openPopup();
-}
-function clearTempMarkers(){
-  try { if(state.mkInicioTemp){ state.mkInicioTemp.remove && state.mkInicioTemp.remove(); state.mkInicioTemp=null; } } catch(_){}
-  try { if(state.mkFinTemp){ state.mkFinTemp.remove && state.mkFinTemp.remove(); state.mkFinTemp=null; } } catch(_){}
-}
-
-// -------- Delete por ID --------
-document.addEventListener('click', async (ev) => {
-  const btn = ev.target.closest('.leaflet-popup [data-act="delete"]');
-  if (!btn) return;
-  let id  = (btn.getAttribute('data-id') || '').trim();
-  const lat = parseFloat(btn.getAttribute('data-lat')||''); const lng = parseFloat(btn.getAttribute('data-lng')||'');
-  if (id === '' || id === 'undefined' || id === 'null') {
-    const eps = 1e-7;
-    const itA = state.items.find(x => x.inicio && Math.abs(x.inicio.lat-lat)<eps && Math.abs(x.inicio.lng-lng)<eps);
-    const itB = state.items.find(x => x.fin && Math.abs(x.fin.lat-lat)<eps && Math.abs(x.fin.lng-lng)<eps);
-    const it = itA || itB;
-    if (it && it.id) id = String(it.id);
-  }
-  if (!id) { alert('No se pudo determinar el ID a eliminar.'); return; }
-  if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  const original = btn.textContent; btn.textContent = 'Eliminando…'; btn.disabled = true;
-  try{
-    const r = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ op:'delete', id }) });
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const data = await r.json(); if (!data.ok) throw new Error(data.error||'delete failed');
-    state.items = state.items.filter(x=>String(x.id).trim()!==String(id).trim()); clearMapLayers(); renderAllIncremental(); toast('🗑️ Registro eliminado');
-  }catch(e){ console.warn(e); alert('No se pudo eliminar'); } finally { btn.textContent = original; btn.disabled = false; }
-});
-
-// -------- Guardado --------
-$('s4-save').onclick = async ()=>{
-  if (!(state.actual.inicio && state.actual.fin)){
-    toast('Faltan coordenadas válidas de inicio/fin.'); return;
-  }
-  if (!state.actual.circuito){
-    toast('Selecciona el circuito.'); return;
-  }
-  showBlocker('Guardando…');
-
-  try {
-    const fotoInicioB64 = state.actual.fotoInicioFile ? await blobToDataURL(await imageToBlob(state.actual.fotoInicioFile)) : '';
-    const fotoFinB64    = state.actual.fotoFinFile   ? await blobToDataURL(await imageToBlob(state.actual.fotoFinFile))   : '';
-
-    const it = {
-      id: crypto.randomUUID(),
-      mode: state.actual.mode,
-      sector: state.actual.sector,
-      subestacion: state.actual.subestacion,
-      circuito: state.actual.circuito,
-      tipo: state.actual.tipo,
-      troncalRamal: state.actual.troncalRamal,
-      terna: state.actual.terna,
-      postesRondados: state.actual.postesRondados,
-      inicio: state.actual.inicio,
-      fin: state.actual.fin,
-      fotoInicio: fotoInicioB64,
-      fotoFin: fotoFinB64,
-      createdAt: new Date().toISOString()
-    };
-
-    const resp = await syncOneToServer(it);
-    const okIds = new Set([...(resp.syncedIds||[]), ...(resp.alreadySyncedIds||[])]);
-    const urlMap = resp.urlMap || {};
-
-    if (okIds.has(it.id)) {
-      it.fotoInicioUrl = (urlMap[it.id]||{}).inicio || '';
-      it.fotoFinUrl    = (urlMap[it.id]||{}).fin || '';
-      delete it.fotoInicio; delete it.fotoFin;
-      delete it.fotoInicioFile; delete it.fotoFinFile;
-
-      state.items.push(it);
-      drawItem(it, true);
-      clearTempMarkers();
-      closeSheet();
-      toast('✅ Guardado en servidor');
-    } else {
-      toast('❌ No se guardó en servidor');
-    }
+    // Reenvía en streaming para soportar binarios (no usar .text())
+    const ct = resp.headers.get('content-type') || 'application/octet-stream';
+    return new Response(resp.body, {
+      status: resp.status,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+        'Vary': 'Origin',
+        'Content-Type': ct,
+        'Cache-Control': 'no-store'
+      }
+    });
   } catch (e) {
-    console.warn(e); toast('❌ Error al guardar');
-  } finally {
-    hideBlocker();
+    return new Response(JSON.stringify({ ok: false, error: 'No se pudo obtener datos (GET)' }), {
+      status: 502,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+        'Vary': 'Origin',
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store'
+      }
+    });
   }
-};
-
-// -------- Eventos UI --------
-$('newTramo').onclick=async()=>{
-  clearWizard(true); state.actual.mode='tramo'; applyModeUI('tramo');
-  if (!catalog.sectors.length) { await loadCatalog(); } initCascadingSelects();
-  openSheet(); setStep(1);
-};
-$('newRonda').onclick=async()=>{
-  clearWizard(true); state.actual.mode='ronda'; applyModeUI('ronda');
-  if (!catalog.sectors.length) { await loadCatalog(); } initCascadingSelects();
-  openSheet(); setStep(1);
-};
-$('s1-cancel').onclick=closeSheet;
-$('s1-next').onclick=()=>{ if(!validateStep1()){ toast(state.actual.mode==='ronda' ? 'Completa Sector, Subestación, Circuito y cantidad.' : 'Completa todos los campos.'); return; } setStep(2); };
-$('s2-back').onclick=()=>setStep(1);
-$('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial. (La foto es opcional)'); return;} setStep(3); };
-$('s3-back').onclick=()=>setStep(2);
-$('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final. (La foto es opcional)'); return;} fillResumen(); setStep(4); };
-
-$('fotoInicio').addEventListener('change', async e=>{
-  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewInicio').src=blobUrl(b); $('previewInicioWrap').classList.remove('hidden'); }
-});
-$('fotoFin').addEventListener('change', async e=>{
-  if(e.target.files[0]){ const b=await imageToBlob(e.target.files[0]); $('previewFin').src=blobUrl(b); $('previewFinWrap').classList.remove('hidden'); }
-});
-
-// ===== Catálogo (Hoja 2) =====
-let catalog = { sectors: [], bySector: {}, bySubestacion: {} };
-function setSelectOptions(sel, arr, placeholder){
-  sel.innerHTML = '';
-  const uniq = Array.from(new Set((arr||[]).map(v => (v||'').toString().trim()).filter(Boolean)));
-  if (placeholder) { const opt=document.createElement('option'); opt.value=''; opt.textContent=placeholder; sel.appendChild(opt); }
-  uniq.sort((a,b)=>a.localeCompare(b,'es'));
-  for(const v of uniq){ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); }
-}
-async function loadCatalog(){
-  try{
-    const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'mode=options';
-    const r = await fetch(url, { method: 'GET' });
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const data = await r.json();
-    if (!data || !data.ok) throw new Error('Respuesta inválida');
-    catalog.sectors = (data.sectors||[]).map(s=>String(s).trim());
-    catalog.bySector = data.bySector || {};
-    catalog.bySubestacion = data.bySubestacion || {};
-  }catch(e){ console.warn('No se pudo cargar catálogo', e); catalog = { sectors: [], bySector: {}, bySubestacion: {} }; }
-}
-function initCascadingSelects(){
-  const selSector = $('sector'); const selSub = $('subestacion'); const selCirc = $('circuito');
-  setSelectOptions(selSector, catalog.sectors, 'Selecciona un sector…'); selSector.disabled = !catalog.sectors.length;
-  selSector.onchange = ()=>{
-    const sec = selSector.value;
-    const subs = (catalog.bySector[sec] || []).map(s=>String(s).trim()).filter(Boolean);
-    setSelectOptions(selSub, subs, subs.length ? 'Selecciona una subestación…' : 'Sin subestaciones');
-    selSub.disabled = subs.length === 0;
-    setSelectOptions(selCirc, [], 'Selecciona una subestación…'); selCirc.disabled = true;
-    state.actual.sector = sec || ''; state.actual.subestacion=''; state.actual.circuito='';
-  };
-  selSub.onchange = ()=>{
-    const sub = selSub.value;
-    const circs = (catalog.bySubestacion[sub] || []).map(s=>String(s).trim()).filter(Boolean);
-    setSelectOptions(selCirc, circs, circs.length ? 'Selecciona un circuito…' : 'Sin circuitos');
-    selCirc.disabled = circs.length === 0;
-    state.actual.subestacion = sub || ''; state.actual.circuito='';
-  };
-  selCirc.onchange = ()=>{ state.actual.circuito = selCirc.value || ''; };
 }
 
-document.addEventListener('DOMContentLoaded', async ()=>{
-  await loadCatalog(); initCascadingSelects();
-  showBlocker('Cargando mapa…'); try { state.items = (await fetchAllFromServer()); } catch (e) { console.warn(e); state.items=[]; } finally { hideBlocker(); if (mapReady) { renderAllIncremental(); } else { pendingRender = true; } }
-});
+export async function onRequestPost({ request, env }) {
+  const origin = request.headers.get('Origin') || '*';
+  const upstream = getUpstream(env);
 
-// Polyfills
-window.requestIdleCallback = window.requestIdleCallback || function (cb, opts) { const start = Date.now(); return setTimeout(function () { cb({ didTimeout: false, timeRemaining: function () { return Math.max(0, 50 - (Date.now() - start)); } }); }, (opts && opts.timeout) || 1); };
-window.cancelIdleCallback = window.cancelIdleCallback || function (id) { clearTimeout(id); };
-if (!window.crypto) { window.crypto = {}; }
-if (!crypto.randomUUID) { crypto.randomUUID = function () { const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'; return tpl.replace(/[xy]/g, function(c){ let r; if (window.crypto && crypto.getRandomValues) { r = crypto.getRandomValues(new Uint8Array(1))[0] & 15; } else { r = Math.floor(Math.random() * 16); } const v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }; }
-</script>
-</body>
-</html>
+  try {
+    // Leemos como texto para no romper base64
+    const bodyText = await request.text();
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45000);
+
+    const upstreamResp = await fetch(upstream, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: bodyText,
+      signal: controller.signal
+    });
+
+    clearTimeout(timer);
+
+    // Devuelve stream del upstream (no convertir a .text())
+    const ct = upstreamResp.headers.get('content-type') || 'application/json';
+    return new Response(upstreamResp.body, {
+      status: upstreamResp.status,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+        'Vary': 'Origin',
+        'Content-Type': ct,
+        'Cache-Control': 'no-store'
+      }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: 'No se pudo conectar con Apps Script' }), {
+      status: 502,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Access-Control-Expose-Headers': 'Content-Type, Content-Length',
+        'Vary': 'Origin',
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store'
+      }
+    });
+  }
+}
