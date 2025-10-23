@@ -351,7 +351,7 @@ whenLeafletReady(()=>{ initMapOnce(); });
 
 // -------- Server I/O --------
 async function fetchAllFromServer(){
-  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all';
+  const url=APPS_SCRIPT_URL+(APPS_SCRIPT_URL.includes('?')?'&':'?')+'mode=all_plus_ronda';
   const r=await fetch(url,{method:'GET'});
   if(!r.ok) throw new Error('HTTP '+r.status);
   const data=await r.json();
