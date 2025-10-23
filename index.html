@@ -72,6 +72,20 @@
 @media (min-width:768px){.step1-two-col{grid-template-columns:1fr 1fr}}
 .step1-col{display:flex;flex-direction:column;gap:.75rem}
 
+
+/* RONDA input harmonize */
+.step1-col .field input[type="number"]{
+  width:100%;
+  height:40px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  padding: 8px 12px;
+  outline: none;
+}
+.step1-col .field input[type="number"]::placeholder{ opacity:.6 }
+
 </style>
 
 <style>
@@ -425,8 +439,8 @@ function drawItem(it,fit=false){
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const fIni = getPhotoSrcFromUrls(it,'inicio'); 
   const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.tipo==='Ronda'?`${it.sector} • ${it.subestacion} • Ronda • Postes: ${it.postesCantidad||0}`:`${it.tipo==='Ronda'?`${it.sector} • ${it.subestacion} • Ronda • Postes: ${it.postesCantidad||0}`:`${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`}`}`, it.id));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.tipo==='Ronda'?`${it.sector} • ${it.subestacion} • Ronda • Postes: ${it.postesCantidad||0}`:`${it.tipo==='Ronda'?`${it.sector} • ${it.subestacion} • Ronda • Postes: ${it.postesCantidad||0}`:`${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`}`}`, it.id));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
 }
