@@ -59,7 +59,7 @@
     input[type="text"],select,input[type="file"]{width:100%;background:#0e1729;color:var(--text);border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px}
     .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#183055;color:#e6f0ff;width:100%;font-weight:700} .btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff} .btn-danger{background:var(--danger)} .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
-    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .ronda{background:#7c3aed} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
+    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
     img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
     .popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
@@ -112,8 +112,7 @@
   <div id="map"></div>
 
   <button id="newTramo" class="fab">+ Nuevo tramo</button>
-
-  <button id="newRonda" class="fab" style="right:16px; bottom:76px; background:#7c3aed;color:white">+ Ronda</button>
+<button id="newRonda" class="fab" style="right:16px; bottom:84px; background:#7c3aed;color:white">+ Ronda</button>
 
   <section id="sheet" class="sheet" aria-modal="true" role="dialog">
     <div class="drag"></div>
@@ -124,7 +123,7 @@
     <div class="chips" style="margin-bottom:8px">
       <span class="chip"><span class="color-box apertura"></span>Apertura</span>
       <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
-      <span class="chip"><span class="color-box ronda"></span>Ronda</span>
+      <span class="chip"><span class="color-box ronda" style="background:#7c3aed"></span>Ronda</span>
     </div>
 
     <div class="step1-two-col">
@@ -140,6 +139,10 @@
         <div class="field">
           <label>Circuito</label>
           <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
+        </div>
+        <div class="field" id="field-postes-ronda" style="display:none">
+          <label>Postes rondados (cantidad)</label>
+          <input id="postesCantidad" type="number" min="1" inputmode="numeric" placeholder="0"/>
         </div>
       </div>
       <div class="step1-col">
@@ -167,9 +170,6 @@
             <option value="Doble">Doble</option>
             <option value="Triple">Triple</option>
           </select>
-          <div class="field" id="field-postes" style="display:none">
-          <label>Postes Rondados (cantidad)</label>
-          <input id="postesCantidad" type="number" inputmode="numeric" min="0" placeholder="Cantidad de postes"/>
         </div>
       </div>
     </div>
@@ -248,8 +248,8 @@ function hideBlocker(){$('blocker').style.display='none'}
 
 // -------- Estado --------
 let map, tiles, mapReady=false, pendingRender=false;
-const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null, mode:'tramo' };
-function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", troncalRamal:"", terna:"", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null, postesCantidad:0 };}
+const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkFinTemp:null};
+function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
 function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(true); clearTempMarkers();}
@@ -354,7 +354,6 @@ async function fetchAllFromServer(){
       tipo:r.tipo||'',
       troncalRamal:r.troncalRamal||'',
       terna:r.terna||'',
-      postesCantidad: (r.postesCantidad!==undefined? Number(r.postesCantidad): 0) || 0,
       inicio:ini,
       fin:fin,
       fotoInicioUrl:r.fotoInicioUrl||'',
@@ -426,8 +425,8 @@ function drawItem(it,fit=false){
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const fIni = getPhotoSrcFromUrls(it,'inicio'); 
   const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`${it.tipo==='Ronda'?'RONDA — ':''}INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}${it.tipo==='Ronda'?' • Postes:'+ (it.postesCantidad||0):' • '+it.troncalRamal+' • '+it.terna}`, it.id));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`${it.tipo==='Ronda'?'RONDA — ':''}FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}${it.tipo==='Ronda'?' • Postes:'+ (it.postesCantidad||0):' • '+it.troncalRamal+' • '+it.terna}`, it.id));
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
 }
@@ -460,11 +459,10 @@ function validateStep1(){
   const tipo = $('tipo').value.trim();
   const troncalRamal = $('troncalRamal').value.trim();
   const terna = $('terna').value.trim();
-  if(state.mode==='ronda'){
-    if(!sector||!sub||!circ) return false;
+  if (window.__modeRonda){
     const pc = parseInt(document.getElementById('postesCantidad').value||'0',10)||0;
-    if(pc<=0) return false;
-    Object.assign(state.actual,{sector,subestacion:sub,circuito:circ, tipo:'Ronda', troncalRamal:'', terna:'', postesCantidad: pc});
+    if(!sector||!sub||!circ||pc<=0) return false;
+    Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:'Ronda',troncalRamal:'',terna:'', postesCantidad:pc});
     return true;
   }
   if(!sector||!sub||!circ||!tipo||!troncalRamal||!terna) return false;
@@ -510,7 +508,6 @@ function fillResumen(){
     <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
     <div><b>Troncal/Ramal:</b> ${it.troncalRamal}</div>
     <div><b>Terna:</b> ${it.terna}</div>
-    ${it.tipo==='Ronda'?`<div><b>Postes rondados:</b> ${it.postesCantidad||0}</div>`:''}
     <div><b>Inicio:</b> ${ini}</div>
     <div><b>Final:</b> ${fin}</div>
   </div>`;
@@ -622,12 +619,12 @@ document.getElementById('s4-save').onclick = async ()=>{
       sector: state.actual.sector,
       subestacion: state.actual.subestacion,
       circuito: state.actual.circuito,
-      tipo: state.mode==='ronda' ? 'Ronda' : state.actual.tipo,
+      tipo: state.actual.tipo,
       troncalRamal: state.actual.troncalRamal,
       terna: state.actual.terna,
       inicio: state.actual.inicio,
       fin: state.actual.fin,
-      postesCantidad: state.mode==='ronda' ? (parseInt(document.getElementById('postesCantidad').value||'0',10)||0) : undefined,
+      postesCantidad: (state.actual.tipo==='Ronda') ? (state.actual.postesCantidad||0) : undefined,
       fotoInicio: fotoInicioB64,
       fotoFin: fotoFinB64,
       createdAt: new Date().toISOString()
@@ -970,45 +967,39 @@ document.addEventListener('DOMContentLoaded', stripNoneInStep1);
 })();
 </script>
 
+
 <script>
-
-// --- Mode toggling for Tramo vs Ronda ---
-function setMode(mode){
-  state.mode = mode; // 'tramo' | 'ronda'
-  const fieldPostes = document.getElementById('field-postes');
-  const tipoSel = document.getElementById('tipo');
-  const troncalSel = document.getElementById('troncalRamal');
-  const ternaSel = document.getElementById('terna');
-
-  if(mode==='ronda'){
-    // hide tipo/troncal/terna; show postes
-    fieldPostes.style.display = '';
-    tipoSel.closest('.field').style.display = 'none';
-    troncalSel.closest('.field').style.display = 'none';
-    ternaSel.closest('.field').style.display = 'none';
-  } else {
-    fieldPostes.style.display = 'none';
-    tipoSel.closest('.field').style.display = '';
-    troncalSel.closest('.field').style.display = '';
-    ternaSel.closest('.field').style.display = '';
+// --- Ronda integration (no tocar flujo de TRAMO) ---
+window.__modeRonda = false;
+function toggleRondaUi(isRonda){
+  const showEl = (el, show)=>{ if(!el) return; el.style.display = show?'':'none'; };
+  const fieldPostes = document.getElementById('field-postes-ronda');
+  const tipoField   = document.getElementById('tipo')?.closest('.field');
+  const troncalFld  = document.getElementById('troncalRamal')?.closest('.field');
+  const ternaFld    = document.getElementById('terna')?.closest('.field');
+  showEl(fieldPostes, !!isRonda);
+  showEl(tipoField,   !isRonda);
+  showEl(troncalFld,  !isRonda);
+  showEl(ternaFld,    !isRonda);
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Asegurar que el click de Tramo mantenga modo normal
+  const btnTramo = document.getElementById('newTramo');
+  if (btnTramo){
+    btnTramo.addEventListener('click', ()=>{ window.__modeRonda=false; toggleRondaUi(false); });
   }
-}
-
-// Wire newRonda and newTramo
-document.getElementById('newTramo').addEventListener('click', ()=>{
-  setMode('tramo'); clearWizard(true); openSheet(); setStep(1);
+  // Nuevo botón Ronda: misma secuencia que Tramo
+  const btnRonda = document.getElementById('newRonda');
+  if (btnRonda){
+    btnRonda.addEventListener('click', ()=>{
+      window.__modeRonda = true;
+      try{ clearWizard(true); }catch(_){}
+      try{ openSheet(); }catch(_){}
+      try{ setStep(1); }catch(_){}
+      toggleRondaUi(true);
+    });
+  }
 });
-const btnRonda = document.getElementById('newRonda');
-if(btnRonda){
-  btnRonda.addEventListener('click', ()=>{
-    setMode('ronda'); clearWizard(true); openSheet(); setStep(1);
-    document.getElementById('tipo').value = 'Ronda';
-  });
-}
-
-// Ensure catalog selects exist before toggling
-document.addEventListener('DOMContentLoaded', ()=> setMode('tramo'));
-
 </script>
 
 </body>
