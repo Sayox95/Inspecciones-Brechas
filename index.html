@@ -11,6 +11,10 @@
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
+/* Transición entre pasos */
+.step{opacity:0;transform:translateY(6px);transition:opacity .25s ease,transform .25s ease}
+.step.active{opacity:1;transform:translateY(0)}
+
 .btn:disabled{opacity:.75;cursor:not-allowed}
 
     
@@ -88,6 +92,25 @@
                 <option value="Apertura">Apertura de brecha</option>
                 <option value="Limpieza">Limpieza de brecha</option>
               </select>
+
+<div class="field">
+  <label for="troncalRamal">Troncal/Ramal</label>
+  <select id="troncalRamal">
+    <option value="">Selecciona…</option>
+    <option value="Troncal">Troncal</option>
+    <option value="Ramal">Ramal</option>
+  </select>
+</div>
+<div class="field">
+  <label for="terna">Terna</label>
+  <select id="terna">
+    <option value="">Selecciona…</option>
+    <option value="Sencilla">Sencilla</option>
+    <option value="Doble">Doble</option>
+    <option value="Triple">Triple</option>
+  </select>
+</div>
+
             </div>
           </div>
           <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
