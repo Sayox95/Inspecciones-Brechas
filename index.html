@@ -8,13 +8,75 @@
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+// Reordena la primera sección en dos columnas: izquierda (sector, subestacion, circuito) y derecha (resto)
+function reflowStep1(){
+  const step = $('step-1');
+  if (!step) return;
+  if (step.querySelector('.step1-two-col')) return;
+
+  const sel = id => step.querySelector('#'+id);
+  const idsLeft = ['sector','subestacion','circuito'];
+  const idsRight = ['tipo','troncalRamal','terna'];
+
+  const grid = document.createElement('div');
+  grid.className = 'step1-two-col';
+  const left = document.createElement('div');
+  left.className = 'step1-col';
+  const right = document.createElement('div');
+  right.className = 'step1-col';
+  grid.appendChild(left);
+  grid.appendChild(right);
+
+  const first = sel(idsLeft.find(id=>!!sel(id))) || step.firstElementChild;
+  if (first) step.insertBefore(grid, first);
+
+  function blockOf(el){
+    if (!el) return null;
+    let p = el;
+    while (p && p !== step && p.parentElement !== step) p = p.parentElement;
+    return (p && p !== step) ? p : el.parentElement;
+  }
+
+  idsLeft.forEach(id=>{
+    const el = sel(id);
+    const blk = blockOf(el);
+    if (blk) left.appendChild(blk);
+  });
+
+  idsRight.forEach(id=>{
+    const el = sel(id);
+    const blk = blockOf(el);
+    if (blk) right.appendChild(blk);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', reflowStep1);
+
+</script>
 
   <style>
 
-/* Mejoradas: transiciones de deslizamiento izquierda entre pasos */
-.step{opacity:0;transform:translateX(24px);transition:opacity .28s ease,transform .28s ease}
-.step.active{opacity:1;transform:translateX(0)}
+/* Transiciones profesionales entre pasos (dirección-aware) */
+.step{opacity:0;transform:translateX(0)}
+.step.active{opacity:1}
+
+/* Animaciones: entradas/salidas con deslizamiento + ligera elevación */
+@keyframes slideInFromRight{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideOutToLeft{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(-28px)}}
+@keyframes slideInFromLeft{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideOutToRight{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(28px)}}
+
+/* Clases utilitarias */
+.anim-enter-left{animation:slideInFromRight .34s cubic-bezier(.22,1,.36,1)}
+.anim-exit-left{animation:slideOutToLeft .30s cubic-bezier(.4,0,.2,1)}
+.anim-enter-right{animation:slideInFromLeft .34s cubic-bezier(.22,1,.36,1)}
+.anim-exit-right{animation:slideOutToRight .30s cubic-bezier(.4,0,.2,1)}
+
+/* Respeta usuarios con reduce motion */
+@media (prefers-reduced-motion: reduce){
+  .anim-enter-left,.anim-exit-left,.anim-enter-right,.anim-exit-right{animation:none}
+}
 
 
 .btn:disabled{opacity:.75;cursor:not-allowed}
@@ -49,7 +111,13 @@
     .blocker{position:fixed;inset:0;z-index:3000;display:none;align-items:center;justify-content:center;background:rgba(5,10,20,.55);backdrop-filter:blur(2px)} .blocker .box{background:#0e1729;border:1px solid #203153;color:#eaf2ff;padding:16px 18px;border-radius:14px;min-width:240px;box-shadow:var(--shadow);text-align:center;font-weight:600}
     .spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
     .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
-  </style>
+  
+/* Layout Step 1: dos columnas responsivas */
+.step1-two-col{display:grid;grid-template-columns:1fr;gap:1rem}
+@media (min-width:768px){.step1-two-col{grid-template-columns:1fr 1fr}}
+.step1-col{display:flex;flex-direction:column;gap:.75rem}
+
+</style>
 </head>
 <body>
   <header>
@@ -198,24 +266,47 @@ function openSheet(){sheet.classList.add('open');}
 function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(true); clearTempMarkers();}
 
 function setStep(n){
+  if (n===step) return;
   const ids=['step-1','step-2','step-3','step-4'];
+  const currentEl = $('step-'+step);
+  const nextEl = $('step-'+n);
+  if (!nextEl) return;
+
+  // Quita estados previos de animación
   ids.forEach(id=>{
     const el=$(id);
     if(!el) return;
-    if(id==='step-'+n){
-      el.classList.remove('hidden');
-      // force next frame to allow transition
-      requestAnimationFrame(()=>el.classList.add('active'));
-    }else{
-      el.classList.remove('active');
-      // wait for transition end then hide
-      el.addEventListener('transitionend', function onTEnd(){
-        el.removeEventListener('transitionend', onTEnd);
-        if(!el.classList.contains('active')) el.classList.add('hidden');
-      }, { once:true });
-    }
+    el.classList.remove('anim-enter-left','anim-exit-left','anim-enter-right','anim-exit-right');
   });
-  step=n;
+
+  // Determina dirección: avanzar -> entra desde derecha (enter-left), salir hacia izquierda (exit-left)
+  const forward = n > step;
+  const enterClass = forward ? 'anim-enter-left' : 'anim-enter-right';
+  const exitClass  = forward ? 'anim-exit-left'  : 'anim-exit-right';
+
+  // Preparar siguiente
+  nextEl.classList.remove('hidden');
+  // Forzamos reflow para que la animación se aplique correctamente
+  void nextEl.offsetWidth;
+  nextEl.classList.add(enterClass, 'active');
+
+  // Animar salida del actual (si existe)
+  if (currentEl) {
+    currentEl.classList.add(exitClass);
+    currentEl.addEventListener('animationend', function onExit(){
+      currentEl.removeEventListener('animationend', onExit);
+      currentEl.classList.remove('active', exitClass);
+      currentEl.classList.add('hidden');
+    }, { once: true });
+  }
+
+  // Limpiar clases del entrante al finalizar
+  nextEl.addEventListener('animationend', function onEnter(){
+    nextEl.removeEventListener('animationend', onEnter);
+    nextEl.classList.remove(enterClass);
+  }, { once: true });
+
+  step = n;
 }
 
 
