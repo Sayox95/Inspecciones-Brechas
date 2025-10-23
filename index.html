@@ -482,6 +482,7 @@ function clearWizard(resetAll=true){
   $('fotoInicio').value='';$('fotoFin').value='';
   $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
   $('previewInicio').src='';$('previewFin').src='';
+  const __pc=document.getElementById('postesCantidad'); if(__pc) __pc.value='';
 }
 function validateStep1(){
   const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
@@ -654,6 +655,19 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
+
+// -------- Cancelación (Resumen) --------
+document.getElementById('s4-cancel').onclick = ()=>{
+  try{
+    // Limpiar campo de postes si existe
+    const pc = document.getElementById('postesCantidad');
+    if (pc) pc.value = '';
+    // Restablecer modo
+    window.__modeRonda = false;
+    // Cerrar y limpiar wizard
+    closeSheet();
+  }catch(e){ console.warn(e); }
+};
 // -------- Guardado --------
 document.getElementById('s4-save').onclick = async ()=>{
   if (!(state.actual.inicio && state.actual.fin)){
