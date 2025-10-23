@@ -12,16 +12,10 @@
 
   <style>
 
-/* Slide-left step transition */
-.steps-wrap { position: relative; overflow: hidden; }
-.step { opacity: 0; transform: translateX(24px); transition: opacity .28s ease, transform .28s ease; position: relative; }
-.step.active { opacity: 1; transform: translateX(0); }
-.step.exiting { position: absolute; top:0; left:0; right:0; }
+/* Mejoradas: transiciones de deslizamiento izquierda entre pasos */
+.step{opacity:0;transform:translateX(24px);transition:opacity .28s ease,transform .28s ease}
+.step.active{opacity:1;transform:translateX(0)}
 
-
-/* Transición entre pasos */
-.step{opacity:0;transform:translateY(6px);transition:opacity .25s ease,transform .25s ease}
-.step.active{opacity:1;transform:translateY(0)}
 
 .btn:disabled{opacity:.75;cursor:not-allowed}
 
@@ -73,7 +67,7 @@
   <section id="sheet" class="sheet" aria-modal="true" role="dialog">
     <div class="drag"></div>
     <div class="content">
-      <div id="step-1" class="grid">
+      <div id="step-1" class="grid step active">
         <div class="card">
           <div class="chips" style="margin-bottom:8px">
             <span class="chip"><span class="color-box apertura"></span>Apertura</span>
@@ -97,7 +91,7 @@
             <div class="field">
               <label>Tipo de brecha</label>
               <select id="tipo">
-  <option value="">Seleccione...</option>
+                <option value="">Selecciona…</option>
                 <option value="Apertura">Apertura de brecha</option>
                 <option value="Limpieza">Limpieza de brecha</option>
               </select>
@@ -130,7 +124,7 @@
         </div>
       </div>
 
-      <div id="step-2" class="grid hidden">
+      <div id="step-2" class="grid step hidden">
         <div class="card grid">
           <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto opcional</u>.</div>
           <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
@@ -148,7 +142,7 @@
         </div>
       </div>
 
-      <div id="step-3" class="grid hidden">
+      <div id="step-3" class="grid step hidden">
         <div class="card grid">
           <div><strong>Paso 3:</strong> Capturar <u>punto final</u> y subir <u>foto opcional</u>.</div>
           <button id="cap-fin" class="btn btn-primary">Captar punto final (GPS)</button>
@@ -166,7 +160,7 @@
         </div>
       </div>
 
-      <div id="step-4" class="grid hidden">
+      <div id="step-4" class="grid step hidden">
         <div class="card grid">
           <div><strong>Resumen</strong> — revisa y guarda.</div>
           <div id="resumen" class="grid"></div>
@@ -201,8 +195,29 @@ const state = { items:[], layers:[], actual:baseActual(), mkInicioTemp:null, mkF
 function baseActual(){return { sector:"", subestacion:"", circuito:"", tipo:"Apertura", inicio:null, fin:null, fotoInicioFile:null, fotoFinFile:null };}
 let step=1; const sheet=$('sheet');
 function openSheet(){sheet.classList.add('open');}
-function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(false); clearTempMarkers();}
-function setStep(n){step=n;['step-1','step-2','step-3','step-4'].forEach(hide); show('step-'+n);}
+function closeSheet(){sheet.classList.remove('open'); setStep(1); clearWizard(true); clearTempMarkers();}
+
+function setStep(n){
+  const ids=['step-1','step-2','step-3','step-4'];
+  ids.forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    if(id==='step-'+n){
+      el.classList.remove('hidden');
+      // force next frame to allow transition
+      requestAnimationFrame(()=>el.classList.add('active'));
+    }else{
+      el.classList.remove('active');
+      // wait for transition end then hide
+      el.addEventListener('transitionend', function onTEnd(){
+        el.removeEventListener('transitionend', onTEnd);
+        if(!el.classList.contains('active')) el.classList.add('hidden');
+      }, { once:true });
+    }
+  });
+  step=n;
+}
+
 
 // -------- Imagen: compresión a JPEG --------
 async function readImageBitmap(file){ return await createImageBitmap(file,{imageOrientation:'from-image'}) }
@@ -256,7 +271,9 @@ async function fetchAllFromServer(){
       sector:r.sector||'',
       subestacion:r.subestacion||'',
       circuito:r.circuito||'',
-      tipo:r.tipo||'Apertura',
+      tipo:r.tipo||'',
+      troncalRamal:r.troncalRamal||'',
+      terna:r.terna||'',
       inicio:ini,
       fin:fin,
       fotoInicioUrl:r.fotoInicioUrl||'',
@@ -313,11 +330,11 @@ function getPhotoSrcFromUrls(it, which){
   return '';
 }
 
-function markerPopupHtml(p,t,src,m,id,extra){
+function markerPopupHtml(p,t,src,m,id){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
   const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
   const actions = id ? `<div style="margin-top:8px"><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p&&p.lat}" data-lng="${p&&p.lng}">🗑️ Eliminar</button></div>`:'';
-  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}${extra?`<div class='popup-extra' style='margin-top:6px;font-size:.9em;opacity:.9'>${extra}</div>`:''}</div>`;
+  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
 }
 
 function drawItem(it,fit=false){
@@ -328,8 +345,8 @@ function drawItem(it,fit=false){
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const fIni = getPhotoSrcFromUrls(it,'inicio'); 
   const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id, it.id, `${it.troncalRamal||''} ${it.terna?('• '+it.terna):''}`));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id, it.id, `${it.troncalRamal||''} ${it.terna?('• '+it.terna):''}`));
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo} • ${it.troncalRamal} • ${it.terna}`, it.id));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
 }
@@ -352,15 +369,18 @@ function renderAllIncremental(){
 // -------- Wizard --------
 function clearWizard(resetAll=true){
   if(resetAll){state.actual=baseActual()} else{state.actual.inicio=null;state.actual.fin=null;state.actual.fotoInicioFile=null;state.actual.fotoFinFile=null}
-  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='Apertura';
+  $('sector').value='';$('subestacion').value='';$('circuito').value='';$('tipo').value='';$('troncalRamal').value='';$('terna').value='';
   $('fotoInicio').value='';$('fotoFin').value='';
   $('previewInicioWrap').classList.add('hidden');$('previewFinWrap').classList.add('hidden');
   $('previewInicio').src='';$('previewFin').src='';
 }
 function validateStep1(){
   const sector=$('sector').value.trim(), sub=$('subestacion').value.trim(), circ=$('circuito').value.trim();
-  if(!sector||!sub||!circ) return false;
-  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo:$('tipo').value});
+  const tipo = $('tipo').value.trim();
+  const troncalRamal = $('troncalRamal').value.trim();
+  const terna = $('terna').value.trim();
+  if(!sector||!sub||!circ||!tipo||!troncalRamal||!terna) return false;
+  Object.assign(state.actual,{sector,subestacion:sub,circuito:circ,tipo,troncalRamal,terna});
   return true;
 }
 async function validateStep2(){
@@ -395,7 +415,16 @@ function fillResumen(){
   const it=state.actual, col=tipoColor(it.tipo);
   const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
   const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
-  $('resumen').innerHTML=`<div class="grid"><div><b>Sector:</b> ${it.sector}</div><div><b>Subestación:</b> ${it.subestacion}</div><div><b>Circuito:</b> ${it.circuito}</div><div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div><div><b>Inicio:</b> ${ini}</div><div><b>Final:</b> ${fin}</div></div>`;
+  $('resumen').innerHTML=`<div class="grid">
+    <div><b>Sector:</b> ${it.sector}</div>
+    <div><b>Subestación:</b> ${it.subestacion}</div>
+    <div><b>Circuito:</b> ${it.circuito}</div>
+    <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
+    <div><b>Troncal/Ramal:</b> ${it.troncalRamal}</div>
+    <div><b>Terna:</b> ${it.terna}</div>
+    <div><b>Inicio:</b> ${ini}</div>
+    <div><b>Final:</b> ${fin}</div>
+  </div>`;
 }
 
 // -------- Captura de puntos --------
@@ -505,6 +534,8 @@ document.getElementById('s4-save').onclick = async ()=>{
       subestacion: state.actual.subestacion,
       circuito: state.actual.circuito,
       tipo: state.actual.tipo,
+      troncalRamal: state.actual.troncalRamal,
+      terna: state.actual.terna,
       inicio: state.actual.inicio,
       fin: state.actual.fin,
       fotoInicio: fotoInicioB64,
@@ -541,10 +572,10 @@ document.getElementById('s4-save').onclick = async ()=>{
 };
 
 // -------- Eventos UI --------
-$('newTramo').onclick=()=>{openSheet(); setStep(1)};
+$('newTramo').onclick=()=>{ clearWizard(true); openSheet(); setStep(1) };
 $('s1-cancel').onclick=closeSheet;
 $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
-$('s2-back').onclick=()=>resetStep1(); setStep(1);
+$('s2-back').onclick=()=>setStep(1);
 $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial. (La foto es opcional)'); return;} setStep(3); };
 $('s3-back').onclick=()=>setStep(2);
 $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final. (La foto es opcional)'); return;} fillResumen(); setStep(4); };
