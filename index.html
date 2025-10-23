@@ -86,6 +86,12 @@
 }
 .step1-col .field input[type="number"]::placeholder{ opacity:.6 }
 
+
+/* === User location marker === */
+.leaflet-user-dot{width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px rgba(37,99,235,.35)}
+.user-pulse{position:absolute;top:50%;left:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:rgba(37,99,235,.22);animation:userPulse 1.8s infinite ease-out}
+@keyframes userPulse{0%{transform:scale(.4);opacity:.9}70%{transform:scale(1.6);opacity:.2}100%{transform:scale(2);opacity:0}}
+
 </style>
 
 <style>
@@ -346,7 +352,14 @@ function whenLeafletReady(cb){
   const iv = setInterval(()=>{ if (window.L){ clearInterval(iv); cb(); } }, 30);
   window.addEventListener('load', ()=>{ if (window.L){ clearInterval(iv); cb(); } });
 }
-function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true}); tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
+function initMapOnce(){ if(map) return; map=L.map('map',{zoomControl:true});
+  // Intento ubicar al usuario y marcar
+  if (navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      try{ var c = pos.coords; showUserOnMap(c.latitude, c.longitude, c.accuracy); }catch(_e){}
+    }, function(_){} , { enableHighAccuracy:true, maximumAge:120000, timeout:5000 });
+  }
+ tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'&copy; OpenStreetMap'}); tiles.addTo(map); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude,p.coords.longitude],16),()=>map.setView([14.0723,-87.1921],7),{enableHighAccuracy:true,timeout:6000});}else{map.setView([14.0723,-87.1921],7);} mapReady=true; if(pendingRender){ pendingRender=false; renderAllIncremental(); } }
 whenLeafletReady(()=>{ initMapOnce(); });
 
 // -------- Server I/O --------
@@ -369,6 +382,8 @@ async function fetchAllFromServer(){
       troncalRamal:r.troncalRamal||'',
       terna:r.terna||'',
       inicio:ini,
+      postesCantidad: (r.postesCantidad!=null ? Number(r.postesCantidad) : (r['POSTES RONDADOS']!=null ? Number(r['POSTES RONDADOS']) : 0)),
+      
       fin:fin,
       fotoInicioUrl:r.fotoInicioUrl||'',
       fotoFinUrl:r.fotoFinUrl||'',
@@ -528,9 +543,31 @@ function fillResumen(){
     <div><b>Final:</b> ${fin}</div>
   </div>`;
 }
+
+// === user location helpers ===
+let userLayer = null, userMarker = null, userAccuracy = null;
+function ensureUserLayer(){
+  if (!userLayer){ userLayer = L.layerGroup().addTo(map); }
+  return userLayer;
+}
+function showUserOnMap(lat, lng, accuracy){
+  if (!window.L || !window.map) return;
+  ensureUserLayer();
+  // Clear previous
+  if (userLayer){ userLayer.clearLayers(); userMarker = null; userAccuracy = null; }
+  // Marker (dot with pulse)
+  const icon = L.divIcon({ className:'', html: '<div class="leaflet-user-dot"></div><div class="user-pulse"></div>', iconSize:[24,24], iconAnchor:[12,12] });
+  userMarker = L.marker([lat,lng], { icon }).addTo(userLayer).bindPopup('Tu ubicación');
+  // Accuracy circle (optional)
+  if (accuracy && !isNaN(accuracy)){
+    userAccuracy = L.circle([lat,lng], { radius: accuracy, weight:1, opacity:.7, fillOpacity:.08 }).addTo(userLayer);
+  }
+}
+
 // -------- Captura de puntos --------
 async function capInicio(){
-  const p=await getGPS(); state.actual.inicio=p;
+  const p=await getGPS(); state.actual.inicio = p;
+  try{ showUserOnMap(p.lat, p.lng, p.accuracy || 25); }catch(_e){}
   if(state.mkInicioTemp){ try{ map && map.removeLayer(state.mkInicioTemp); }catch(_){ } }
   const mk=L.marker([p.lat,p.lng],{draggable:true,title:'Inicio (ajustable)'}).bindPopup('Arrastra para ajustar inicio');
   mk.on('dragend',e=>{const ll=e.target.getLatLng(); state.actual.inicio={lat:ll.lat,lng:ll.lng,ts:Date.now()}});
