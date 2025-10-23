@@ -515,18 +515,19 @@ function fillResumen(){
   const it=state.actual, col=tipoColor(it.tipo);
   const ini=it.inicio?`${it.inicio.lat.toFixed(6)}, ${it.inicio.lng.toFixed(6)}`:'-';
   const fin=it.fin?`${it.fin.lat.toFixed(6)}, ${it.fin.lng.toFixed(6)}`:'-';
+  const troncalTerna = (it.tipo==='Ronda')
+    ? ''
+    : `<div><b>Troncal/Ramal:</b> ${it.troncalRamal}</div><div><b>Terna:</b> ${it.terna}</div>`;
   $('resumen').innerHTML=`<div class="grid">
     <div><b>Sector:</b> ${it.sector}</div>
     <div><b>Subestación:</b> ${it.subestacion}</div>
     <div><b>Circuito:</b> ${it.circuito}</div>
     <div><b>Tipo:</b> <span style="color:${col}">${it.tipo}</span></div>
-    <div><b>Troncal/Ramal:</b> ${it.troncalRamal}</div>
-    <div><b>Terna:</b> ${it.terna}</div>
+    ${troncalTerna}
     <div><b>Inicio:</b> ${ini}</div>
     <div><b>Final:</b> ${fin}</div>
   </div>`;
 }
-
 // -------- Captura de puntos --------
 async function capInicio(){
   const p=await getGPS(); state.actual.inicio=p;
@@ -976,7 +977,7 @@ document.addEventListener('DOMContentLoaded', stripNoneInStep1);
   const _setStep = setStep;
   window.setStep = function(n){
     _setStep(n);
-    if (n === 1) { try { stripNoneInStep1(); } catch(e){} } 
+    if (n === 1) { try { stripNoneInStep1(); } catch(e){} }
   }
 })();
 </script>
