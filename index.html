@@ -11,6 +11,14 @@
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
+
+/* Slide-left step transition */
+.steps-wrap { position: relative; overflow: hidden; }
+.step { opacity: 0; transform: translateX(24px); transition: opacity .28s ease, transform .28s ease; position: relative; }
+.step.active { opacity: 1; transform: translateX(0); }
+.step.exiting { position: absolute; top:0; left:0; right:0; }
+
+
 /* Transición entre pasos */
 .step{opacity:0;transform:translateY(6px);transition:opacity .25s ease,transform .25s ease}
 .step.active{opacity:1;transform:translateY(0)}
@@ -89,6 +97,7 @@
             <div class="field">
               <label>Tipo de brecha</label>
               <select id="tipo">
+  <option value="">Seleccione...</option>
                 <option value="Apertura">Apertura de brecha</option>
                 <option value="Limpieza">Limpieza de brecha</option>
               </select>
@@ -304,11 +313,11 @@ function getPhotoSrcFromUrls(it, which){
   return '';
 }
 
-function markerPopupHtml(p,t,src,m,id){
+function markerPopupHtml(p,t,src,m,id,extra){
   const coords=(p && typeof p.lat==='number' && typeof p.lng==='number')?`Lat: ${p.lat.toFixed(6)} · Lng: ${p.lng.toFixed(6)}`:'Coordenadas no válidas';
   const img=src?`<img class="popup-img" src="${src}" alt="foto"/>`:'<div class="popup-meta">Sin foto</div>';
   const actions = id ? `<div style="margin-top:8px"><button class="btn btn-danger" data-act="delete" data-id="${id}" data-lat="${p&&p.lat}" data-lng="${p&&p.lng}">🗑️ Eliminar</button></div>`:'';
-  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}</div>`;
+  return `<div style="min-width:220px"><div class="popup-title">${t}</div><div class="popup-meta">${coords}</div><div class="popup-meta">${m}</div>${img}${actions}${extra?`<div class='popup-extra' style='margin-top:6px;font-size:.9em;opacity:.9'>${extra}</div>`:''}</div>`;
 }
 
 function drawItem(it,fit=false){
@@ -319,8 +328,8 @@ function drawItem(it,fit=false){
   const mkFin=L.circleMarker([it.fin.lat,it.fin.lng],{radius:7,color:col,fillColor:col,fillOpacity:.95});
   const fIni = getPhotoSrcFromUrls(it,'inicio'); 
   const fFin = getPhotoSrcFromUrls(it,'fin'); 
-  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
-  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id));
+  mkIni.bindPopup(()=>markerPopupHtml(it.inicio,`INICIO — ${it.circuito}`, fIni, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id, it.id, `${it.troncalRamal||''} ${it.terna?('• '+it.terna):''}`));
+  mkFin.bindPopup(()=>markerPopupHtml(it.fin,`FINAL — ${it.circuito}`, fFin, `${it.sector} • ${it.subestacion} • ${it.tipo}`, it.id, it.id, `${it.troncalRamal||''} ${it.terna?('• '+it.terna):''}`));
   addLayer(line); addLayer(mkIni); addLayer(mkFin);
   if(fit && map){const b=L.latLngBounds([[it.inicio.lat,it.inicio.lng],[it.fin.lat,it.fin.lng]]); map.fitBounds(b.pad(0.3));}
 }
@@ -535,7 +544,7 @@ document.getElementById('s4-save').onclick = async ()=>{
 $('newTramo').onclick=()=>{openSheet(); setStep(1)};
 $('s1-cancel').onclick=closeSheet;
 $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
-$('s2-back').onclick=()=>setStep(1);
+$('s2-back').onclick=()=>resetStep1(); setStep(1);
 $('s2-next').onclick=async ()=>{ const ok=await validateStep2(); if(!ok){toast('Captura el punto inicial. (La foto es opcional)'); return;} setStep(3); };
 $('s3-back').onclick=()=>setStep(2);
 $('s3-next').onclick=async ()=>{ const ok=await validateStep3(); if(!ok){toast('Captura el punto final. (La foto es opcional)'); return;} fillResumen(); setStep(4); };
