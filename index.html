@@ -116,106 +116,66 @@
   <section id="sheet" class="sheet" aria-modal="true" role="dialog">
     <div class="drag"></div>
     <div class="content">
-      <div id="step-1" class="grid step active">
-        <div class="card">
-          <div class="chips" style="margin-bottom:8px">
-            <span class="chip"><span class="color-box apertura"></span>Apertura</span>
-            <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
-          </div>
+      
+<div id="step-1" class="grid step active">
+  <div class="card">
+    <div class="chips" style="margin-bottom:8px">
+      <span class="chip"><span class="color-box apertura"></span>Apertura</span>
+      <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
+    </div>
 
-          <div class="step1-two-col">
-            <div class="step1-col">
-              <div class="field">
-                <label>Sector</label>
-                <select id="sector" disabled><option value="">Cargando sectores…</option></select>
-              </div>
-              <div class="field">
-                <label>Subestación</label>
-                <select id="subestacion" disabled><option value="">Selecciona un sector…</option></select>
-              </div>
-              <div class="field">
-                <label>Circuito</label>
-                <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
-              </div>
-            </div>
-            <div class="step1-col">
-              <div class="field">
-                <label>Tipo de brecha</label>
-                <select id="tipo">
-                  <option value="">Selecciona…</option>
-                  <option value="Apertura">Apertura de brecha</option>
-                  <option value="Limpieza">Limpieza de brecha</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="troncalRamal">Troncal/Ramal</label>
-                <select id="troncalRamal">
-                  <option value="">Selecciona…</option>
-                  <option value="Troncal">Troncal</option>
-                  <option value="Ramal">Ramal</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="terna">Terna</label>
-                <select id="terna">
-                  <option value="">Selecciona…</option>
-                  <option value="Sencilla">Sencilla</option>
-                  <option value="Doble">Doble</option>
-                  <option value="Triple">Triple</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
-          <div class="bar" style="margin-top:10px">
-            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s1-next" class="btn btn-primary">Siguiente</button>
-          </div>
-</div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Circuito</label>
-              <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
-            </div>
-            <div class="field">
-              <label>Tipo de brecha</label>
-              <select id="tipo">
-                <option value="">Selecciona…</option>
-                <option value="Apertura">Apertura de brecha</option>
-                <option value="Limpieza">Limpieza de brecha</option>
-              </select>
-
-<div class="field">
-  <label for="troncalRamal">Troncal/Ramal</label>
-  <select id="troncalRamal">
-    <option value="">Selecciona…</option>
-    <option value="Troncal">Troncal</option>
-    <option value="Ramal">Ramal</option>
-  </select>
-</div>
-<div class="field">
-  <label for="terna">Terna</label>
-  <select id="terna">
-    <option value="">Selecciona…</option>
-    <option value="Sencilla">Sencilla</option>
-    <option value="Doble">Doble</option>
-    <option value="Triple">Triple</option>
-  </select>
-</div>
-
-            </div>
-          </div>
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
-          <div class="bar" style="margin-top:10px">
-            <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
-            <button id="s1-next" class="btn btn-primary">Siguiente</button>
-          </div>
+    <div class="step1-two-col">
+      <div class="step1-col">
+        <div class="field">
+          <label>Sector</label>
+          <select id="sector" disabled><option value="">Cargando sectores…</option></select>
+        </div>
+        <div class="field">
+          <label>Subestación</label>
+          <select id="subestacion" disabled><option value="">Selecciona un sector…</option></select>
+        </div>
+        <div class="field">
+          <label>Circuito</label>
+          <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
         </div>
       </div>
+      <div class="step1-col">
+        <div class="field">
+          <label>Tipo de brecha</label>
+          <select id="tipo">
+            <option value="">Selecciona…</option>
+            <option value="Apertura">Apertura de brecha</option>
+            <option value="Limpieza">Limpieza de brecha</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="troncalRamal">Troncal/Ramal</label>
+          <select id="troncalRamal">
+            <option value="">Selecciona…</option>
+            <option value="Troncal">Troncal</option>
+            <option value="Ramal">Ramal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="terna">Terna</label>
+          <select id="terna">
+            <option value="">Selecciona…</option>
+            <option value="Sencilla">Sencilla</option>
+            <option value="Doble">Doble</option>
+            <option value="Triple">Triple</option>
+          </select>
+        </div>
+      </div>
+    </div>
 
-      <div id="step-2" class="grid step hidden">
+    <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
+    <div class="bar" style="margin-top:10px">
+      <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
+      <button id="s1-next" class="btn btn-primary">Siguiente</button>
+    </div>
+  </div>
+</div>
+<div id="step-2" class="grid step hidden">
         <div class="card grid">
           <div><strong>Paso 2:</strong> Capturar <u>punto inicial</u> y subir <u>foto opcional</u>.</div>
           <button id="cap-inicio" class="btn btn-primary">Captar punto inicial (GPS)</button>
