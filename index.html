@@ -1054,5 +1054,53 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 </script>
 
+
+<!-- Geo-permission Help Modal -->
+<div id="geoHelpModal" class="geohelp-modal hidden" aria-hidden="true">
+  <div class="geohelp-panel">
+    <h3 style="margin:0 0 8px 0">No se pudo acceder a tu ubicación</h3>
+    <p style="margin:0 0 8px 0">Para permitir la ubicación:</p>
+    <ol style="margin:0 0 8px 20px">
+      <li>Toca el ícono de información del sitio (🔧 / ☰ / ⓘ) junto a la dirección.</li>
+      <li>Busca <b>Ubicación</b> y selecciona <b>Permitir</b>.</li>
+      <li>Toca <b>🔄</b> para recargar esta página.</li>
+    </ol>
+    <button id="geoHelpClose" class="geohelp-btn">Entendido</button>
+  </div>
+</div>
+<style>
+  .geohelp-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.46);z-index:99999}
+  .geohelp-panel{width:min(520px,90vw);background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.35)}
+  .geohelp-btn{background:#334155;border:none;color:#fff;padding:10px 14px;border-radius:10px;font-weight:600;margin-top:6px}
+  .hidden{display:none !important}
+</style>
+<script>
+function showGeoHelp(err){
+  try{
+    const m = document.getElementById('geoHelpModal');
+    const c = document.getElementById('geoHelpClose');
+    if(!m) return;
+    m.classList.remove('hidden'); m.setAttribute('aria-hidden','false');
+    c && c.addEventListener('click', ()=>{ m.classList.add('hidden'); m.setAttribute('aria-hidden','true'); }, { once:true });
+  }catch(_){}
+}
+</script>
+
+
+<script>
+// Wrapper que detecta errores de permisos en geolocalización
+(function(){
+  try{
+    if (navigator && navigator.geolocation){
+      const _orig = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+      navigator.geolocation.getCurrentPosition = function(success, error, options){
+        const wrapErr = function(e){ try{ showGeoHelp(e); }catch(_){ } if (typeof error==='function') return error(e); };
+        return _orig(success, wrapErr, options);
+      };
+    }
+  }catch(_){}
+})();
+</script>
+
 </body>
 </html>
