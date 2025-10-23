@@ -8,52 +8,7 @@
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-// Reordena la primera sección en dos columnas: izquierda (sector, subestacion, circuito) y derecha (resto)
-function reflowStep1(){
-  const step = $('step-1');
-  if (!step) return;
-  if (step.querySelector('.step1-two-col')) return;
-
-  const sel = id => step.querySelector('#'+id);
-  const idsLeft = ['sector','subestacion','circuito'];
-  const idsRight = ['tipo','troncalRamal','terna'];
-
-  const grid = document.createElement('div');
-  grid.className = 'step1-two-col';
-  const left = document.createElement('div');
-  left.className = 'step1-col';
-  const right = document.createElement('div');
-  right.className = 'step1-col';
-  grid.appendChild(left);
-  grid.appendChild(right);
-
-  const first = sel(idsLeft.find(id=>!!sel(id))) || step.firstElementChild;
-  if (first) step.insertBefore(grid, first);
-
-  function blockOf(el){
-    if (!el) return null;
-    let p = el;
-    while (p && p !== step && p.parentElement !== step) p = p.parentElement;
-    return (p && p !== step) ? p : el.parentElement;
-  }
-
-  idsLeft.forEach(id=>{
-    const el = sel(id);
-    const blk = blockOf(el);
-    if (blk) left.appendChild(blk);
-  });
-
-  idsRight.forEach(id=>{
-    const el = sel(id);
-    const blk = blockOf(el);
-    if (blk) right.appendChild(blk);
-  });
-}
-
-document.addEventListener('DOMContentLoaded', reflowStep1);
-
-</script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
 
@@ -112,10 +67,10 @@ document.addEventListener('DOMContentLoaded', reflowStep1);
     .spinner{width:22px;height:22px;border-radius:50%;border:3px solid #29436f;border-top-color:#4cc9f0;animation:sp .9s linear infinite;display:inline-block;margin-right:10px;vertical-align:middle} @keyframes sp{to{transform:rotate(360deg)}}
     .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#0e1729;color:#eaf2ff;border:1px solid #203153;padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);z-index:4000;display:none;font-weight:600;max-width:90vw;text-align:center}
   
-/* Layout Step 1: dos columnas responsivas */
-.step1-two-col{display:grid;grid-template-columns:1fr;gap:1rem}
-@media (min-width:768px){.step1-two-col{grid-template-columns:1fr 1fr}}
-.step1-col{display:flex;flex-direction:column;gap:.75rem}
+/* Step1 two-column layout */
+.two-col{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+@media(min-width:768px){.two-col{grid-template-columns:1fr 1fr}}
+.step1-col{display:flex;flex-direction:column;gap:10px}
 
 </style>
 </head>
@@ -142,21 +97,34 @@ document.addEventListener('DOMContentLoaded', reflowStep1);
             <span class="chip"><span class="color-box limpieza"></span>Limpieza</span>
           </div>
           <div class="row">
-            <div class="field">
+            
+            
+          </div>
+          <div class="row">
+            
+            
+
+
+            </div>
+          </div>
+          
+<div class="two-col step1-two-col">
+  <div class="step1-col">
+    <div class="field">
               <label>Sector</label>
               <select id="sector" disabled><option value="">Cargando sectores…</option></select>
             </div>
-            <div class="field">
+    <div class="field">
               <label>Subestación</label>
               <select id="subestacion" disabled><option value="">Selecciona un sector…</option></select>
             </div>
-          </div>
-          <div class="row">
-            <div class="field">
+    <div class="field">
               <label>Circuito</label>
               <select id="circuito" disabled><option value="">Selecciona una subestación…</option></select>
             </div>
-            <div class="field">
+  </div>
+  <div class="step1-col">
+    <div class="field">
               <label>Tipo de brecha</label>
               <select id="tipo">
                 <option value="">Selecciona…</option>
@@ -172,7 +140,8 @@ document.addEventListener('DOMContentLoaded', reflowStep1);
     <option value="Ramal">Ramal</option>
   </select>
 </div>
-<div class="field">
+    None
+    <div class="field">
   <label for="terna">Terna</label>
   <select id="terna">
     <option value="">Selecciona…</option>
@@ -181,10 +150,9 @@ document.addEventListener('DOMContentLoaded', reflowStep1);
     <option value="Triple">Triple</option>
   </select>
 </div>
-
-            </div>
-          </div>
-          <div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
+  </div>
+</div>
+<div class="note">Completa y pulsa <strong>Siguiente</strong>.</div>
           <div class="bar" style="margin-top:10px">
             <button id="s1-cancel" class="btn btn-ghost">Cancelar</button>
             <button id="s1-next" class="btn btn-primary">Siguiente</button>
