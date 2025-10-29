@@ -1198,6 +1198,13 @@ async function loadCircuitosFromGithub(rawUrl){
     const capaCircuitos = L.geoJSON(data, {
       pane: 'circuitos-pane',
       style,
+      filter: (feat)=>{
+        try{
+          const p=(feat&&feat.properties)||{};
+          const s=(p.SECTOR||p.sector||'').toString().trim().toLowerCase();
+          return s=== 'san pedro sula';
+        }catch(_){return false}
+      },
       onEachFeature: (feat, layer)=>{
         const p = (feat && feat.properties) || {};
         const nombre = p.CIRCUITO || p.circuito || p.NOMBRE || p.name || 'Circuito';
@@ -1212,8 +1219,7 @@ async function loadCircuitosFromGithub(rawUrl){
       }
     });
 
-    if (typeof addLayer === 'function') addLayer(capaCircuitos);
-    else capaCircuitos.addTo(map);
+    window.circuitLayer = capaCircuitos; capaCircuitos.addTo(map);
 
     try{ capaCircuitos.bringToBack(); }catch(_){}
     return capaCircuitos;
