@@ -92,6 +92,19 @@
 .user-pulse{position:absolute;top:50%;left:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:rgba(37,99,235,.22);animation:userPulse 1.8s infinite ease-out}
 @keyframes userPulse{0%{transform:scale(.4);opacity:.9}70%{transform:scale(1.6);opacity:.2}100%{transform:scale(2);opacity:0}}
 
+
+/* Etiquetas permanentes para nombres de circuito */
+.leaflet-tooltip.circuit-label{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #1f2937;
+  font-weight: 700;
+  letter-spacing: .2px;
+  text-shadow: 0 0 2px #fff, 0 0 3px #fff, 0 0 6px #fff;
+  pointer-events: none;
+}
+
 </style>
 
 <style>
@@ -1113,6 +1126,81 @@ function showGeoHelp(err){
       };
     }
   }catch(_){}
+})();
+</script>
+
+
+<script>
+// --- Capa de circuitos (GeoJSON desde GitHub) ---
+(function ensureCircuitPane(){
+  try{
+    if (!window.map) return;
+    if (!map.getPane('circuitos-pane')){
+      map.createPane('circuitos-pane');
+      map.getPane('circuitos-pane').style.zIndex = 330; // debajo de tramos/markers
+    }
+  }catch(_){}
+})();
+
+async function loadCircuitosFromGithub(rawUrl){
+  try{
+    const r = await fetch(rawUrl, { cache: 'no-store' });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+
+    const style = {
+      pane: 'circuitos-pane',
+      color: '#0ea5e9',
+      weight: 3,
+      opacity: 0.9
+    };
+
+    const capaCircuitos = L.geoJSON(data, {
+      pane: 'circuitos-pane',
+      style,
+      onEachFeature: (feat, layer)=>{
+        const p = (feat && feat.properties) || {};
+        const nombre = p.CIRCUITO || p.circuito || p.NOMBRE || p.name || 'Circuito';
+        layer.bindTooltip(String(nombre), {
+          permanent: true,
+          direction: 'center',
+          className: 'circuit-label'
+        });
+        const sector = p.SECTOR ? `<br><b>Sector:</b> ${p.SECTOR}` : '';
+        const subest = p.SUBESTACION ? `<br><b>Subestación:</b> ${p.SUBESTACION}` : '';
+        layer.bindPopup(`<b>${nombre}</b>${sector}${subest}`);
+      }
+    });
+
+    // Añadir usando helper si existe
+    if (typeof addLayer === 'function') addLayer(capaCircuitos);
+    else capaCircuitos.addTo(map);
+
+    try{ capaCircuitos.bringToBack(); }catch(_){}
+    return capaCircuitos;
+  }catch(e){
+    console.warn('No se pudo cargar capa de circuitos:', e);
+    if (typeof toast === 'function') toast('⚠️ No se pudo cargar capa de circuitos');
+    return null;
+  }
+}
+
+// Intento cargar la capa cuando Leaflet y el mapa estén listos
+(function waitMapAndLoad(){
+  const url = "'https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson'";
+  const tryLoad = ()=>{
+    if (window.map && window.L){
+      // asegurar pane y cargar
+      try{ if (!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex = 330; } }catch(_){}
+      loadCircuitosFromGithub(url);
+      return true;
+    }
+    return false;
+  };
+  if (!tryLoad()){
+    const iv = setInterval(()=>{ if (tryLoad()){ clearInterval(iv); } }, 250);
+    setTimeout(()=>clearInterval(iv), 30000);
+  }
 })();
 </script>
 
