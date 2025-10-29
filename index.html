@@ -1130,8 +1130,50 @@ function showGeoHelp(err){
 </script>
 
 
+
 <script>
-// --- Capa de circuitos (GeoJSON desde GitHub) ---
+// --- Capa de circuitos (GeoJSON desde GitHub) — robusta con validación de JSON/HTML y fixes de URL ---
+
+// Normaliza URL tipo "github.com/.../blob/..." a "raw.githubusercontent.com/..."
+function normalizeGithubUrl(u){
+  try{
+    if (/github\.com\/.+\/blob\//i.test(u)){
+      // https://github.com/user/repo/blob/branch/path.geojson -> https://raw.githubusercontent.com/user/repo/branch/path.geojson
+      return u.replace(/https?:\/\/github\.com\//i, 'https://raw.githubusercontent.com/')
+              .replace(/\/blob\//i, '/');
+    }
+  }catch(_){}
+  return u;
+}
+
+async function fetchJsonSmart(url){
+  const u = normalizeGithubUrl(url);
+  const sep = u.includes('?') ? '&' : '?';
+  const finalUrl = u + sep + 'nocache=' + Date.now();
+  let respText = '';
+  try{
+    const r = await fetch(finalUrl, { mode:'cors', cache:'no-store', referrerPolicy:'no-referrer' });
+    const ct = (r.headers.get('content-type')||'').toLowerCase();
+    respText = await r.text();
+    if (!r.ok){
+      throw new Error('HTTP '+r.status+' '+respText.slice(0,120));
+    }
+    const t = respText.trim().replace(/^\uFEFF/, ''); // quita BOM si existe
+    if (ct.includes('application/json') || t.startsWith('{') || t.startsWith('[')){
+      return JSON.parse(t);
+    }
+    // Si parece HTML, informa
+    if (/^<!doctype\s+html/i.test(t) || t.startsWith('<')){
+      throw new Error('Respuesta HTML (¿URL incorrecta o CORS?). Primeros bytes: '+t.slice(0,80));
+    }
+    // Último intento de parseo
+    return JSON.parse(t);
+  }catch(err){
+    console.warn('fetchJsonSmart fail:', err, 'texto:', respText.slice(0,160));
+    throw err;
+  }
+}
+
 (function ensureCircuitPane(){
   try{
     if (!window.map) return;
@@ -1144,9 +1186,7 @@ function showGeoHelp(err){
 
 async function loadCircuitosFromGithub(rawUrl){
   try{
-    const r = await fetch(rawUrl, { cache: 'no-store' });
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const data = await r.json();
+    const data = await fetchJsonSmart(rawUrl);
 
     const style = {
       pane: 'circuitos-pane',
@@ -1172,7 +1212,6 @@ async function loadCircuitosFromGithub(rawUrl){
       }
     });
 
-    // Añadir usando helper si existe
     if (typeof addLayer === 'function') addLayer(capaCircuitos);
     else capaCircuitos.addTo(map);
 
@@ -1180,17 +1219,16 @@ async function loadCircuitosFromGithub(rawUrl){
     return capaCircuitos;
   }catch(e){
     console.warn('No se pudo cargar capa de circuitos:', e);
-    if (typeof toast === 'function') toast('⚠️ No se pudo cargar capa de circuitos');
+    if (typeof toast === 'function') toast('⚠️ No se pudo cargar capa de circuitos (revisa el enlace RAW)');
     return null;
   }
 }
 
-// Intento cargar la capa cuando Leaflet y el mapa estén listos
+// Cargar la capa cuando Leaflet y el mapa estén listos
 (function waitMapAndLoad(){
-  const url = "'https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson'";
+  const url = "https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson";
   const tryLoad = ()=>{
     if (window.map && window.L){
-      // asegurar pane y cargar
       try{ if (!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex = 330; } }catch(_){}
       loadCircuitosFromGithub(url);
       return true;
@@ -1203,6 +1241,7 @@ async function loadCircuitosFromGithub(rawUrl){
   }
 })();
 </script>
+
 
 </body>
 </html>
