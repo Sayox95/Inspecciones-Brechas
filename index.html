@@ -105,7 +105,30 @@
   pointer-events: none;
 }
 
+/* --- Subestación filter panel --- */
+.filter-panel{position:absolute;top:140px;left:12px;z-index:9999;background:#ffffffcc;
+  backdrop-filter: blur(4px);padding:12px 12px 8px;border-radius:12px;border:1px solid rgba(0,0,0,.1);
+  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px}
+.filter-panel h3{margin:0 0 8px 0;font-weight:700;color:#111827;font-size:14px}
+.filter-panel .row{margin:4px 0}
+.filter-panel label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#111827}
+.filter-panel input[type="checkbox"]{width:16px;height:16px}
+.filter-panel .sub-count{font-size:12px;opacity:.7;margin-left:auto}
+
+
+/* --- Toggle button for filter panel (mobile friendly) --- */
+.filter-toggle{position:absolute;top:140px;left:12px;z-index:10000;
+  background:#111827;color:#fff;border:none;border-radius:999px;padding:8px 12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);font-weight:700;font-size:13px;display:none}
+.filter-panel .filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.filter-panel .close-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-weight:700}
+@media (max-width: 768px){
+  .filter-panel{display:none}
+  .filter-toggle{display:inline-flex}
+}
+
 </style>
+
 
 <style>
 /* --- Transición refinada (deslizamiento + leve escala + sombra) --- */
@@ -1130,124 +1153,168 @@ function showGeoHelp(err){
 </script>
 
 
-
 <script>
-// --- Capa de circuitos (GeoJSON desde GitHub) — robusta con validación de JSON/HTML y fixes de URL ---
-
-// Normaliza URL tipo "github.com/.../blob/..." a "raw.githubusercontent.com/..."
-function normalizeGithubUrl(u){
-  try{
-    if (/github\.com\/.+\/blob\//i.test(u)){
-      // https://github.com/user/repo/blob/branch/path.geojson -> https://raw.githubusercontent.com/user/repo/branch/path.geojson
-      return u.replace(/https?:\/\/github\.com\//i, 'https://raw.githubusercontent.com/')
-              .replace(/\/blob\//i, '/');
-    }
-  }catch(_){}
-  return u;
+// --- Capa de circuitos (GeoJSON desde GitHub) — robusta/persistente y coloreada por CIRCUITO ---
+function normalizeGithubUrl(u){ try{ if(/github\.com\/.+\/blob\//i.test(u)) return u.replace(/https?:\/\/github\.com\//i,'https://raw.githubusercontent.com/').replace(/\/blob\//i,'/'); }catch(_){} return u; }
+async function fetchJsonSmart(url){ const u=normalizeGithubUrl(url); const sep=u.includes('?')?'&':'?'; const finalUrl=u+sep+'nocache='+Date.now();
+  let respText=''; const r=await fetch(finalUrl, { mode:'cors', cache:'no-store', referrerPolicy:'no-referrer' });
+  const ct=(r.headers.get('content-type')||'').toLowerCase(); respText=await r.text();
+  if(!r.ok) throw new Error('HTTP '+r.status+' '+respText.slice(0,120));
+  const t=respText.trim().replace(/^\uFEFF/,''); if(ct.includes('application/json')||t.startsWith('{{')||t.startsWith('[')) return JSON.parse(t);
+  if(/^<!doctype\s+html/i.test(t)||t.startsWith('<')) throw new Error('Respuesta HTML (¿URL RAW incorrecta?). '+t.slice(0,80));
+  return JSON.parse(t);
 }
-
-async function fetchJsonSmart(url){
-  const u = normalizeGithubUrl(url);
-  const sep = u.includes('?') ? '&' : '?';
-  const finalUrl = u + sep + 'nocache=' + Date.now();
-  let respText = '';
-  try{
-    const r = await fetch(finalUrl, { mode:'cors', cache:'no-store', referrerPolicy:'no-referrer' });
-    const ct = (r.headers.get('content-type')||'').toLowerCase();
-    respText = await r.text();
-    if (!r.ok){
-      throw new Error('HTTP '+r.status+' '+respText.slice(0,120));
+(function ensureCircuitPane(){ try{ if(!window.map) return; if(!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex=330; } }catch(_){} })();
+const circuitColors = [
+  '#ef4444','#b91c1c','#f97316','#c2410c','#eab308','#a16207',
+  '#22c55e','#15803d','#3b82f6','#1e3a8a','#8b5cf6','#6d28d9',
+  '#ec4899','#9d174d','#14b8a6','#0f766e','#84cc16','#4d7c0f',
+  '#f59e0b','#b45309','#0ea5e9','#0369a1','#a855f7','#7e22ce',
+  '#f43f5e','#be123c','#10b981','#047857','#60a5fa','#1d4ed8',
+  '#d946ef','#9333ea','#f87171','#dc2626','#fb923c','#ea580c',
+  '#facc15','#ca8a04','#4ade80','#16a34a','#38bdf8','#2563eb',
+  '#818cf8','#4338ca','#f472b6','#be185d','#2dd4bf','#0d9488',
+  '#a3e635','#65a30d','#fbbf24','#d97706','#38bdf8','#1d4ed8',
+  '#c084fc','#9333ea','#fb7185','#e11d48','#34d399','#059669'
+];
+function getCircuitColor(name){ if(!name) return '#94a3b8'; let hash=0; for(let i=0;i<name.length;i++){ hash=name.charCodeAt(i)+((hash<<5)-hash); } const idx=Math.abs(hash)%circuitColors.length; return circuitColors[idx]; }
+async function loadCircuitosColored(rawUrl){ try{ const data=await fetchJsonSmart(rawUrl);
+  const capaCircuitos = L.geoJSON(data, {
+    pane:'circuitos-pane',
+    style: function(feat){ const p=feat.properties||{}; const nombre=p.CIRCUITO||p.circuito||p.NOMBRE||p.name||''; return { pane:'circuitos-pane', color:getCircuitColor(nombre), weight:3, opacity:0.9 }; },
+    filter: function(feat){ try{ const p=(feat&&feat.properties)||{}; const s=(p.SECTOR||p.sector||'').toString().trim().toLowerCase(); return s==='san pedro sula'; }catch(_){ return false; } },
+    onEachFeature: function(feat, layer){ const p=feat.properties||{}; const nombre=p.CIRCUITO||p.circuito||p.NOMBRE||p.name||'Circuito';
+      layer.bindTooltip(String(nombre),{ permanent:true, direction:'center', className:'circuit-label' });
+      const sector=p.SECTOR?'<br><b>Sector:</b> '+p.SECTOR:''; const subest=p.SUBESTACION?'<br><b>Subestación:</b> '+p.SUBESTACION:'';
+      layer.bindPopup('<b>'+nombre+'</b>'+sector+subest);
     }
-    const t = respText.trim().replace(/^\uFEFF/, ''); // quita BOM si existe
-    if (ct.includes('application/json') || t.startsWith('{') || t.startsWith('[')){
-      return JSON.parse(t);
-    }
-    // Si parece HTML, informa
-    if (/^<!doctype\s+html/i.test(t) || t.startsWith('<')){
-      throw new Error('Respuesta HTML (¿URL incorrecta o CORS?). Primeros bytes: '+t.slice(0,80));
-    }
-    // Último intento de parseo
-    return JSON.parse(t);
-  }catch(err){
-    console.warn('fetchJsonSmart fail:', err, 'texto:', respText.slice(0,160));
-    throw err;
-  }
-}
-
-(function ensureCircuitPane(){
-  try{
-    if (!window.map) return;
-    if (!map.getPane('circuitos-pane')){
-      map.createPane('circuitos-pane');
-      map.getPane('circuitos-pane').style.zIndex = 330; // debajo de tramos/markers
-    }
-  }catch(_){}
-})();
-
-async function loadCircuitosFromGithub(rawUrl){
-  try{
-    const data = await fetchJsonSmart(rawUrl);
-
-    const style = {
-      pane: 'circuitos-pane',
-      color: '#0ea5e9',
-      weight: 3,
-      opacity: 0.9
-    };
-
-    const capaCircuitos = L.geoJSON(data, {
-      pane: 'circuitos-pane',
-      style,
-      filter: (feat)=>{
-        try{
-          const p=(feat&&feat.properties)||{};
-          const s=(p.SECTOR||p.sector||'').toString().trim().toLowerCase();
-          return s=== 'san pedro sula';
-        }catch(_){return false}
-      },
-      onEachFeature: (feat, layer)=>{
-        const p = (feat && feat.properties) || {};
-        const nombre = p.CIRCUITO || p.circuito || p.NOMBRE || p.name || 'Circuito';
-        layer.bindTooltip(String(nombre), {
-          permanent: true,
-          direction: 'center',
-          className: 'circuit-label'
-        });
-        const sector = p.SECTOR ? `<br><b>Sector:</b> ${p.SECTOR}` : '';
-        const subest = p.SUBESTACION ? `<br><b>Subestación:</b> ${p.SUBESTACION}` : '';
-        layer.bindPopup(`<b>${nombre}</b>${sector}${subest}`);
-      }
-    });
-
-    window.circuitLayer = capaCircuitos; capaCircuitos.addTo(map);
-
-    try{ capaCircuitos.bringToBack(); }catch(_){}
-    return capaCircuitos;
-  }catch(e){
-    console.warn('No se pudo cargar capa de circuitos:', e);
-    if (typeof toast === 'function') toast('⚠️ No se pudo cargar capa de circuitos (revisa el enlace RAW)');
-    return null;
-  }
-}
-
-// Cargar la capa cuando Leaflet y el mapa estén listos
+  });
+  window.circuitLayer=capaCircuitos; capaCircuitos.addTo(map); try{ capaCircuitos.bringToBack(); }catch(_){}
+  return capaCircuitos;
+}catch(e){ console.warn('No se pudo cargar capa de circuitos:', e); if(typeof toast==='function') toast('⚠️ No se pudo cargar capa de circuitos'); return null; } }
 (function waitMapAndLoad(){
-  const url = "https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson";
-  const tryLoad = ()=>{
-    if (window.map && window.L){
-      try{ if (!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex = 330; } }catch(_){}
-      loadCircuitosFromGithub(url);
-      return true;
-    }
-    return false;
-  };
-  if (!tryLoad()){
-    const iv = setInterval(()=>{ if (tryLoad()){ clearInterval(iv); } }, 250);
-    setTimeout(()=>clearInterval(iv), 30000);
-  }
+  const url = 'https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson';
+  const tryLoad=()=>{ if(window.map&&window.L){ try{ if(!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex=330; } }catch(_){ } loadCircuitosColored(url); return true; } return false; };
+  if(!tryLoad()){ const iv=setInterval(()=>{ if(tryLoad()) clearInterval(iv); },250); setTimeout(()=>clearInterval(iv),30000); }
 })();
 </script>
 
+
+<!-- Subestación Filter Panel -->
+<div id="subestacionFilterPanel" class="filter-panel" style="display:none">
+  <div class="filter-head"><h3>Filtrar por Subestación</h3><label style="display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:8px;font-weight:600;color:#111827"><input type="checkbox" id="sub_all" checked> Todos</label><button id="hideFilterPanel" class="close-btn" title="Ocultar">×</button></div>
+  <div id="subestacionCheckboxes"></div>
+</div>
+
+
+<script>
+// --- Subestación filter logic ---
+function buildSubestacionIndex(capa){
+  const idx = new Map(); // subestacion -> [layers]
+  capa.eachLayer(l => {
+    try{
+      const p = (l.feature && l.feature.properties) ? l.feature.properties : {};
+      const sub = (p.SUBESTACION || '').toString().trim();
+      if(!sub) return;
+      if(!idx.has(sub)) idx.set(sub, []);
+      idx.get(sub).push(l);
+    }catch(_){}
+  });
+  return idx;
+}
+
+function createSubestacionFilter(capa){
+  function setAll(checked){
+    const master = document.getElementById('sub_all'); if(master) master.checked = checked;
+    const cont = document.getElementById('subestacionCheckboxes'); if(!cont) return;
+    cont.querySelectorAll('input[type="checkbox"]').forEach(chk=>{ if(chk.checked!==checked){ chk.checked = checked; chk.dispatchEvent(new Event('change')); } });
+  }
+  function syncMaster(){
+    const cont = document.getElementById('subestacionCheckboxes'); if(!cont) return;
+    const boxes = Array.from(cont.querySelectorAll('input[type="checkbox"]'));
+    const allOn = boxes.length && boxes.every(b=>b.checked);
+    const master = document.getElementById('sub_all');
+    if(master){ master.checked = allOn; master.indeterminate = !allOn && boxes.some(b=>b.checked); }
+  }
+  const master = document.getElementById('sub_all'); if(master && !master.__wired){ master.__wired=true; master.addEventListener('change', e=> setAll(e.target.checked)); }
+
+  const panel = document.getElementById('subestacionFilterPanel');
+  const cont  = document.getElementById('subestacionCheckboxes');
+  if(!panel || !cont) return;
+
+  const idx = buildSubestacionIndex(capa);
+  if(idx.size === 0){
+    panel.style.display='none';
+    return;
+  }
+  // Save global for later use
+  window.__subIdx = idx;
+
+  // Build checkbox list
+  cont.innerHTML = '';
+  const subs = Array.from(idx.keys()).sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+  subs.forEach(sub => {
+    const id = 'sub_' + sub.replace(/[^a-z0-9_]+/gi,'_');
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<label for="${id}">
+      <input type="checkbox" id="${id}" checked>
+      <span>${sub}</span>
+      <span class="sub-count">${idx.get(sub).length}</span>
+    </label>`;
+    cont.appendChild(row);
+    const chk = row.querySelector('input');
+    chk.addEventListener('change', (e)=>{
+      const visible = e.target.checked;
+      const layers = idx.get(sub) || [];
+      layers.forEach(l => {
+        if(visible){
+          if(!map.hasLayer(l)) l.addTo(map);
+        }else{
+          if(map.hasLayer(l)) map.removeLayer(l);
+        }
+      });
+    });
+  });
+
+  panel.style.display='block';
+}
+
+// Hook into the end of loadCircuitosColored to create the filter
+(function hookFilter(){
+  const orig = window.loadCircuitosColored;
+  if(typeof orig !== 'function') return;
+  window.loadCircuitosColored = async function(url){
+    const capa = await orig(url);
+    try{ if(capa) createSubestacionFilter(capa); }catch(_){}
+    return capa;
+  };
+})();
+</script>
+
+
+<button id="toggleFilterPanel" class="filter-toggle" title="Mostrar filtros">Filtros</button>
+
+
+<script>
+function showFilterPanel(){
+  const panel = document.getElementById('subestacionFilterPanel');
+  const toggle = document.getElementById('toggleFilterPanel');
+  if(panel){ panel.style.display = 'block'; }
+  if(toggle){ toggle.style.display = 'none'; }
+}
+function hideFilterPanel(){
+  const panel = document.getElementById('subestacionFilterPanel');
+  const toggle = document.getElementById('toggleFilterPanel');
+  if(panel){ panel.style.display = 'none'; }
+  if(toggle){ toggle.style.display = 'inline-flex'; }
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  const hideBtn = document.getElementById('hideFilterPanel');
+  const toggle = document.getElementById('toggleFilterPanel');
+  if(hideBtn){ hideBtn.addEventListener('click', hideFilterPanel); }
+  if(toggle){ toggle.addEventListener('click', showFilterPanel); }
+});
+</script>
 
 </body>
 </html>
