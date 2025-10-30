@@ -106,11 +106,9 @@
 }
 
 /* --- Subestación filter panel --- */
-.filter-panel{position:absolute;top:140px;left:12px;z-index:10010;background:#ffffffcc;
+.filter-panel{position:absolute;top:140px;left:12px;z-index:1105;background:#ffffffcc;
   backdrop-filter: blur(4px);padding:12px 12px 8px;border-radius:12px;border:1px solid rgba(0,0,0,.1);
-  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px display:none!important
-  z-index: 1000 !important;
-}
+  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px; display:none!important}
 .filter-panel h3{margin:0 0 8px 0;font-weight:700;color:#111827;font-size:14px}
 .filter-panel .row{margin:4px 0}
 .filter-panel label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#111827}
@@ -119,12 +117,10 @@
 
 
 /* --- Toggle button for filter panel (mobile friendly) --- */
-.filter-toggle{position:absolute;top:140px;left:12px;z-index:10000;
+.filter-toggle{position:absolute;top:140px;left:12px;z-index:1100;
   background:#111827;color:#fff;border:none;border-radius:9999px;padding:0;
-  width:44px;height:44px;display:none;align-items:center;justify-content:center;
-  box-shadow:0 8px 24px rgba(0,0,0,.18);
-  z-index: 1000 !important;
-}
+  width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);}
 .filter-panel .filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .filter-panel .close-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-weight:700}
 /* toggle visible en todas las vistas */
@@ -133,9 +129,6 @@
 
 .filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
 .filter-toggle:hover{background:#0b1220}
-#blocker{z-index:20000 !important}
-.filter-panel{z-index:1000 !important}
-.filter-toggle{z-index:1000 !important}
 </style>
 
 
@@ -310,35 +303,7 @@ const IMG_QUALITY = 0.72;
 const $ = (id)=>document.getElementById(id);
 function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
-
-// === Control de visibilidad del filtro mientras carga ===
-function showBlocker(t){
-  $('blockerText').textContent = t || 'Procesando…';
-  $('blocker').style.display = 'flex';
-  try{
-    const panel = document.getElementById('subestacionFilterPanel');
-    const toggle = document.getElementById('toggleFilterPanel');
-    if (panel) panel.style.display = 'none';
-    if (toggle) {
-      toggle.style.pointerEvents = 'none';
-      toggle.style.opacity = '0.5';
-      toggle.style.display = 'none';
-    }
-  }catch(_){}
-}
-
-function hideBlocker(){
-  $('blocker').style.display = 'none';
-  try{
-    const toggle = document.getElementById('toggleFilterPanel');
-    if (toggle) {
-      toggle.style.display = 'inline-flex';
-      toggle.style.pointerEvents = '';
-      toggle.style.opacity = '';
-    }
-  }catch(_){}
-}
-
+function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
 function hideBlocker(){$('blocker').style.display='none'}
 
 // -------- Estado --------
@@ -1363,44 +1328,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(hideBtn){ hideBtn.addEventListener('click', hideFilterPanel); }
   if(toggle){ toggle.addEventListener('click', showFilterPanel); }
 });
-</script>
-
-
-<script>
-// Seguridad extra: re-habilita el botón de filtros cuando el loader (#blocker) se oculta
-(function(){
-  function setToggleEnabled(enabled){
-    const t = document.getElementById('toggleFilterPanel');
-    if(!t) return;
-    if(enabled){
-      t.style.pointerEvents = '';
-      t.style.opacity = '';
-    }else{
-      t.style.pointerEvents = 'none';
-      t.style.opacity = '0.5';
-    }
-  }
-  function syncWithBlocker(){
-    const blocker = document.getElementById('blocker');
-    if(!blocker){ setToggleEnabled(true); return; }
-    const cs = window.getComputedStyle(blocker);
-    const visible = cs && cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
-    setToggleEnabled(!visible);
-  }
-  // Observa cambios de estilo en #blocker
-  const blockEl = document.getElementById('blocker');
-  if(blockEl){
-    const obs = new MutationObserver(syncWithBlocker);
-    obs.observe(blockEl, { attributes: true, attributeFilter: ['style', 'class'] });
-  }
-  // También en cambios globales por si #blocker se reinyecta
-  const rootObs = new MutationObserver(syncWithBlocker);
-  rootObs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-  // Arranca sincronizado
-  document.addEventListener('DOMContentLoaded', syncWithBlocker);
-  window.addEventListener('load', syncWithBlocker);
-  setInterval(syncWithBlocker, 1000); // cinturón y tirantes
-})();
 </script>
 
 </body>
