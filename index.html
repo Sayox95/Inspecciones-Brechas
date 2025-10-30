@@ -108,7 +108,9 @@
 /* --- Subestación filter panel --- */
 .filter-panel{position:absolute;top:140px;left:12px;z-index:10010;background:#ffffffcc;
   backdrop-filter: blur(4px);padding:12px 12px 8px;border-radius:12px;border:1px solid rgba(0,0,0,.1);
-  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px display:none!important}
+  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px display:none!important
+  z-index: 1000 !important;
+}
 .filter-panel h3{margin:0 0 8px 0;font-weight:700;color:#111827;font-size:14px}
 .filter-panel .row{margin:4px 0}
 .filter-panel label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#111827}
@@ -117,10 +119,12 @@
 
 
 /* --- Toggle button for filter panel (mobile friendly) --- */
-.filter-toggle{display:inline-flex;position:absolute;top:140px;left:12px;z-index:10000;
+.filter-toggle{position:absolute;top:140px;left:12px;z-index:10000;
   background:#111827;color:#fff;border:none;border-radius:9999px;padding:0;
-  width:44px;height:44px;align-items:center;justify-content:center;
-  box-shadow:0 8px 24px rgba(0,0,0,.18);}
+  width:44px;height:44px;display:none;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  z-index: 1000 !important;
+}
 .filter-panel .filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .filter-panel .close-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-weight:700}
 /* toggle visible en todas las vistas */
@@ -303,7 +307,33 @@ const IMG_QUALITY = 0.72;
 const $ = (id)=>document.getElementById(id);
 function show(id){$(id).classList.remove('hidden')} function hide(id){$(id).classList.add('hidden')}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200);}
-function showBlocker(t){$('blockerText').textContent=t||'Procesando…';$('blocker').style.display='flex'}
+
+// === Control de visibilidad del filtro mientras carga ===
+function showBlocker(t){
+  $('blockerText').textContent = t || 'Procesando...';
+  $('blocker').style.display = 'flex';
+  try {
+    const panel = document.getElementById('subestacionFilterPanel');
+    const toggle = document.getElementById('toggleFilterPanel');
+    if (panel) panel.style.display = 'none';
+    if (toggle) {
+      toggle.style.pointerEvents = 'none';
+      toggle.style.opacity = '0.5';
+    }
+  } catch(e){ console.warn('Error ocultando filtro:', e); }
+}
+
+function hideBlocker(){
+  $('blocker').style.display = 'none';
+  try {
+    const toggle = document.getElementById('toggleFilterPanel');
+    if (toggle) {
+      toggle.style.pointerEvents = '';
+      toggle.style.opacity = '';
+    }
+  } catch(e){ console.warn('Error reactivando filtro:', e); }
+}
+
 function hideBlocker(){$('blocker').style.display='none'}
 
 // -------- Estado --------
