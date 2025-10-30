@@ -313,28 +313,30 @@ function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block'
 
 // === Control de visibilidad del filtro mientras carga ===
 function showBlocker(t){
-  $('blockerText').textContent = t || 'Procesando...';
+  $('blockerText').textContent = t || 'Procesando…';
   $('blocker').style.display = 'flex';
-  try {
+  try{
     const panel = document.getElementById('subestacionFilterPanel');
     const toggle = document.getElementById('toggleFilterPanel');
     if (panel) panel.style.display = 'none';
     if (toggle) {
       toggle.style.pointerEvents = 'none';
       toggle.style.opacity = '0.5';
+      toggle.style.display = 'none';
     }
-  } catch(e){ console.warn('Error ocultando filtro:', e); }
+  }catch(_){}
 }
 
 function hideBlocker(){
   $('blocker').style.display = 'none';
-  try {
+  try{
     const toggle = document.getElementById('toggleFilterPanel');
     if (toggle) {
+      toggle.style.display = 'inline-flex';
       toggle.style.pointerEvents = '';
       toggle.style.opacity = '';
     }
-  } catch(e){ console.warn('Error reactivando filtro:', e); }
+  }catch(_){}
 }
 
 function hideBlocker(){$('blocker').style.display='none'}
