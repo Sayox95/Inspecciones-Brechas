@@ -133,6 +133,9 @@
 
 .filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
 .filter-toggle:hover{background:#0b1220}
+#blocker{z-index:20000 !important}
+.filter-panel{z-index:1000 !important}
+.filter-toggle{z-index:1000 !important}
 </style>
 
 
@@ -1358,6 +1361,44 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(hideBtn){ hideBtn.addEventListener('click', hideFilterPanel); }
   if(toggle){ toggle.addEventListener('click', showFilterPanel); }
 });
+</script>
+
+
+<script>
+// Seguridad extra: re-habilita el botón de filtros cuando el loader (#blocker) se oculta
+(function(){
+  function setToggleEnabled(enabled){
+    const t = document.getElementById('toggleFilterPanel');
+    if(!t) return;
+    if(enabled){
+      t.style.pointerEvents = '';
+      t.style.opacity = '';
+    }else{
+      t.style.pointerEvents = 'none';
+      t.style.opacity = '0.5';
+    }
+  }
+  function syncWithBlocker(){
+    const blocker = document.getElementById('blocker');
+    if(!blocker){ setToggleEnabled(true); return; }
+    const cs = window.getComputedStyle(blocker);
+    const visible = cs && cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+    setToggleEnabled(!visible);
+  }
+  // Observa cambios de estilo en #blocker
+  const blockEl = document.getElementById('blocker');
+  if(blockEl){
+    const obs = new MutationObserver(syncWithBlocker);
+    obs.observe(blockEl, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+  // También en cambios globales por si #blocker se reinyecta
+  const rootObs = new MutationObserver(syncWithBlocker);
+  rootObs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+  // Arranca sincronizado
+  document.addEventListener('DOMContentLoaded', syncWithBlocker);
+  window.addEventListener('load', syncWithBlocker);
+  setInterval(syncWithBlocker, 1000); // cinturón y tirantes
+})();
 </script>
 
 </body>
