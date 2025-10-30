@@ -106,9 +106,9 @@
 }
 
 /* --- Subestación filter panel --- */
-.filter-panel{position:absolute;top:140px;left:12px;z-index:9999;background:#ffffffcc;
+.filter-panel{position:absolute;top:140px;left:12px;z-index:10010;background:#ffffffcc;
   backdrop-filter: blur(4px);padding:12px 12px 8px;border-radius:12px;border:1px solid rgba(0,0,0,.1);
-  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px}
+  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px display:none!important}
 .filter-panel h3{margin:0 0 8px 0;font-weight:700;color:#111827;font-size:14px}
 .filter-panel .row{margin:4px 0}
 .filter-panel label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#111827}
@@ -118,15 +118,17 @@
 
 /* --- Toggle button for filter panel (mobile friendly) --- */
 .filter-toggle{position:absolute;top:140px;left:12px;z-index:10000;
-  background:#111827;color:#fff;border:none;border-radius:999px;padding:8px 12px;
-  box-shadow:0 8px 24px rgba(0,0,0,.18);font-weight:700;font-size:13px;display:none}
+  background:#111827;color:#fff;border:none;border-radius:9999px;padding:0;
+  width:44px;height:44px;display:none;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);}
 .filter-panel .filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .filter-panel .close-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-weight:700}
-@media (max-width: 768px){
-  .filter-panel{display:none}
-  .filter-toggle{display:inline-flex}
-}
+/* toggle visible en todas las vistas */
+.filter-toggle{display:inline-flex}
 
+
+.filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
+.filter-toggle:hover{background:#0b1220}
 </style>
 
 
@@ -153,6 +155,8 @@
 .step1-two-col{display:grid;grid-template-columns:1fr;gap:1rem}
 @media (min-width:768px){.step1-two-col{grid-template-columns:1fr 1fr}}
 .step1-col{display:flex;flex-direction:column;gap:.75rem}
+.filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
+.filter-toggle:hover{background:#0b1220}
 </style>
 
 </head>
@@ -1119,10 +1123,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   </div>
 </div>
 <style>
-  .geohelp-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.46);z-index:99999}
+  .geohelp-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.46);z-index:100109}
   .geohelp-panel{width:min(520px,90vw);background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:14px;padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.35)}
   .geohelp-btn{background:#334155;border:none;color:#fff;padding:10px 14px;border-radius:10px;font-weight:600;margin-top:6px}
   .hidden{display:none !important}
+.filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
+.filter-toggle:hover{background:#0b1220}
 </style>
 <script>
 function showGeoHelp(err){
@@ -1202,84 +1208,91 @@ async function loadCircuitosColored(rawUrl){ try{ const data=await fetchJsonSmar
 
 <!-- Subestación Filter Panel -->
 <div id="subestacionFilterPanel" class="filter-panel" style="display:none">
-  <div class="filter-head"><h3>Filtrar por Subestación</h3><label style="display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:8px;font-weight:600;color:#111827"><input type="checkbox" id="sub_all" checked> Todos</label><button id="hideFilterPanel" class="close-btn" title="Ocultar">×</button></div>
+  <div class="filter-head"><h3>Filtrar por Subestación</h3><button id="hideFilterPanel" class="close-btn" title="Ocultar">×</button></div>
   <div id="subestacionCheckboxes"></div>
 </div>
 
 
+
 <script>
-// --- Subestación filter logic ---
+// --- Subestación filter logic (clean) ---
 function buildSubestacionIndex(capa){
-  const idx = new Map(); // subestacion -> [layers]
-  capa.eachLayer(l => {
-    try{
-      const p = (l.feature && l.feature.properties) ? l.feature.properties : {};
+  const idx = new Map();
+  try{
+    capa.eachLayer(l => {
+      const p = l && l.feature && l.feature.properties ? l.feature.properties : {};
       const sub = (p.SUBESTACION || '').toString().trim();
       if(!sub) return;
       if(!idx.has(sub)) idx.set(sub, []);
       idx.get(sub).push(l);
-    }catch(_){}
-  });
+    });
+  }catch(_){}
   return idx;
 }
 
 function createSubestacionFilter(capa){
-  function setAll(checked){
-    const master = document.getElementById('sub_all'); if(master) master.checked = checked;
-    const cont = document.getElementById('subestacionCheckboxes'); if(!cont) return;
-    cont.querySelectorAll('input[type="checkbox"]').forEach(chk=>{ if(chk.checked!==checked){ chk.checked = checked; chk.dispatchEvent(new Event('change')); } });
-  }
-  function syncMaster(){
-    const cont = document.getElementById('subestacionCheckboxes'); if(!cont) return;
-    const boxes = Array.from(cont.querySelectorAll('input[type="checkbox"]'));
-    const allOn = boxes.length && boxes.every(b=>b.checked);
-    const master = document.getElementById('sub_all');
-    if(master){ master.checked = allOn; master.indeterminate = !allOn && boxes.some(b=>b.checked); }
-  }
-  const master = document.getElementById('sub_all'); if(master && !master.__wired){ master.__wired=true; master.addEventListener('change', e=> setAll(e.target.checked)); }
-
   const panel = document.getElementById('subestacionFilterPanel');
   const cont  = document.getElementById('subestacionCheckboxes');
   if(!panel || !cont) return;
 
   const idx = buildSubestacionIndex(capa);
-  if(idx.size === 0){
-    panel.style.display='none';
-    return;
-  }
-  // Save global for later use
-  window.__subIdx = idx;
+  if(idx.size === 0){ panel.style.display='none'; return; }
 
-  // Build checkbox list
+  // Reset
   cont.innerHTML = '';
+
+  // Master checkbox 'Todos'
+  const masterRow = document.createElement('div'); masterRow.className='row';
+  masterRow.innerHTML = '<label><input type="checkbox" id="sub_all" checked> <span><b>Todos</b></span></label>';
+  cont.appendChild(masterRow);
+  const master = masterRow.querySelector('#sub_all');
+
+  function setAll(checked){
+    master.checked = checked;
+    const boxes = cont.querySelectorAll('input[type="checkbox"]');
+    boxes.forEach(chk=>{
+      if(chk === master) return;
+      if(chk.checked !== checked){
+        chk.checked = checked;
+        chk.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+  function syncMaster(){
+    const boxes = Array.from(cont.querySelectorAll('input[type="checkbox"]')).filter(x=>x!==master);
+    const allOn = boxes.length && boxes.every(b=>b.checked);
+    master.checked = allOn;
+    master.indeterminate = !allOn && boxes.some(b=>b.checked);
+  }
+  master.addEventListener('change', e => setAll(e.target.checked));
+
+  // Individual subestaciones
   const subs = Array.from(idx.keys()).sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
   subs.forEach(sub => {
     const id = 'sub_' + sub.replace(/[^a-z0-9_]+/gi,'_');
     const row = document.createElement('div'); row.className='row';
-    row.innerHTML = `<label for="${id}">
-      <input type="checkbox" id="${id}" checked>
-      <span>${sub}</span>
-      <span class="sub-count">${idx.get(sub).length}</span>
-    </label>`;
+    row.innerHTML = '<label for="'+id+'">'
+      + '<input type="checkbox" id="'+id+'" checked>'
+      + '<span>'+sub+'</span>'
+      + '<span class="sub-count">'+(idx.get(sub).length)+'</span>'
+      + '</label>';
     cont.appendChild(row);
     const chk = row.querySelector('input');
     chk.addEventListener('change', (e)=>{
       const visible = e.target.checked;
       const layers = idx.get(sub) || [];
       layers.forEach(l => {
-        if(visible){
-          if(!map.hasLayer(l)) l.addTo(map);
-        }else{
-          if(map.hasLayer(l)) map.removeLayer(l);
-        }
+        if(visible){ if(!map.hasLayer(l)) l.addTo(map); }
+        else { if(map.hasLayer(l)) map.removeLayer(l); }
       });
+      syncMaster();
     });
   });
 
-  panel.style.display='block';
+  syncMaster();
 }
 
-// Hook into the end of loadCircuitosColored to create the filter
+// Hook to call createSubestacionFilter after loading circuits
 (function hookFilter(){
   const orig = window.loadCircuitosColored;
   if(typeof orig !== 'function') return;
@@ -1292,20 +1305,21 @@ function createSubestacionFilter(capa){
 </script>
 
 
-<button id="toggleFilterPanel" class="filter-toggle" title="Mostrar filtros">Filtros</button>
+
+<button id="toggleFilterPanel" class="filter-toggle" title="Mostrar filtros" aria-label="Mostrar filtros"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"></line><circle cx="10" cy="6" r="2" fill="white"></circle><line x1="4" y1="12" x2="20" y2="12"></line><circle cx="14" cy="12" r="2" fill="white"></circle><line x1="4" y1="18" x2="20" y2="18"></line><circle cx="8" cy="18" r="2" fill="white"></circle></svg></button>
 
 
 <script>
 function showFilterPanel(){
   const panel = document.getElementById('subestacionFilterPanel');
   const toggle = document.getElementById('toggleFilterPanel');
-  if(panel){ panel.style.display = 'block'; }
+  if(panel){ panel.style.display = 'block'; panel.classList.remove('hidden'); }
   if(toggle){ toggle.style.display = 'none'; }
 }
 function hideFilterPanel(){
   const panel = document.getElementById('subestacionFilterPanel');
   const toggle = document.getElementById('toggleFilterPanel');
-  if(panel){ panel.style.display = 'none'; }
+  if(panel){ panel.style.display = 'none'; panel.classList.add('hidden'); }
   if(toggle){ toggle.style.display = 'inline-flex'; }
 }
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1314,7 +1328,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(hideBtn){ hideBtn.addEventListener('click', hideFilterPanel); }
   if(toggle){ toggle.addEventListener('click', showFilterPanel); }
 });
-</script> 
- 
+</script>
+
 </body>
 </html>
