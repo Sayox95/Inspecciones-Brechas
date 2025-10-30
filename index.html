@@ -59,7 +59,7 @@
     input[type="text"],select,input[type="file"]{width:100%;background:#0e1729;color:var(--text);border:1px solid #1f2c49;border-radius:12px;padding:10px 12px;font-size:14px}
     .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;background:#183055;color:#e6f0ff;width:100%;font-weight:700} .btn-primary{background:var(--accent);color:#051423} .btn-ok{background:var(--ok);color:#06240e} .btn-ghost{background:#0e1729;border:1px solid #203153;color:#d7e5ff} .btn-danger{background:var(--danger)} .bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .chips{display:flex;gap:8px;flex-wrap:wrap} .chip{padding:6px 10px;border-radius:999px;background:#0e1729;border:1px solid #22355c;font-size:12px;color:var(--muted)} .color-box{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle}
-    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none!important}
+    .apertura{background:var(--warn)} .limpieza{background:var(--ok)} .muted{color:var(--muted)} .note{font-size:12px;color:var(--muted)} .hidden{display:none}
     .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px} .grid{display:grid;gap:8px}
     img.preview{width:160px;height:auto;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer}
     .popup-title{font-weight:800;margin-bottom:4px} .popup-meta{font-size:12px;color:#9fb3c7} .popup-img{width:200px;max-width:80vw;border-radius:10px;margin-top:6px;border:1px solid #1f2c49}
@@ -108,7 +108,7 @@
 /* --- Subestación filter panel --- */
 .filter-panel{position:absolute;top:140px;left:12px;z-index:1105;background:#ffffffcc;
   backdrop-filter: blur(4px);padding:12px 12px 8px;border-radius:12px;border:1px solid rgba(0,0,0,.1);
-  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px; display:none!important}
+  box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:14px;max-height:70vh;overflow-y:auto;min-width:220px; display:none}
 .filter-panel h3{margin:0 0 8px 0;font-weight:700;color:#111827;font-size:14px}
 .filter-panel .row{margin:4px 0}
 .filter-panel label{display:flex;align-items:center;gap:8px;cursor:pointer;color:#111827}
@@ -117,9 +117,9 @@
 
 
 /* --- Toggle button for filter panel (mobile friendly) --- */
-.filter-toggle{position:absolute;top:140px;left:12px;z-index:1100;
+.filter-toggle{display:inline-flex;position:absolute;top:140px;left:12px;z-index:1100;
   background:#111827;color:#fff;border:none;border-radius:9999px;padding:0;
-  width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+  width:44px;height:44px;display:none;align-items:center;justify-content:center;
   box-shadow:0 8px 24px rgba(0,0,0,.18);}
 .filter-panel .filter-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .filter-panel .close-btn{background:#111827;color:#fff;border:none;border-radius:8px;padding:4px 8px;font-weight:700}
@@ -129,7 +129,11 @@
 
 .filter-toggle:focus-visible{outline:2px solid #60a5fa; outline-offset:2px;}
 .filter-toggle:hover{background:#0b1220}
+
+/* Fuerza panel visible cuando está abierto */
+.filter-panel.open{ display:block !important; visibility:visible; opacity:1; pointer-events:auto }
 </style>
+
 
 
 <style>
@@ -1329,6 +1333,36 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(toggle){ toggle.addEventListener('click', showFilterPanel); }
 });
 </script>
+
+
+
+<script>
+(function(){
+  function toggleFilterPanel(){
+    try{
+      var panel = document.getElementById('subestacionFilterPanel');
+      if(!panel) return;
+      var willOpen = !panel.classList.contains('open');
+      if(willOpen){
+        panel.classList.add('open');
+      }else{
+        panel.classList.remove('open');
+      }
+    }catch(e){ console.warn('toggleFilterPanel error', e); }
+  }
+  function hideFilterPanel(){
+    var panel = document.getElementById('subestacionFilterPanel');
+    if(panel) panel.classList.remove('open');
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var t = document.getElementById('toggleFilterPanel');
+    if(t && !t.__wired){ t.__wired = true; t.addEventListener('click', toggleFilterPanel); }
+    var h = document.getElementById('hideFilterPanel');
+    if(h && !h.__wired){ h.__wired = true; h.addEventListener('click', hideFilterPanel); }
+  });
+})();
+</script>
+
 
 </body>
 </html>
