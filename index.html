@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <link rel="icon" href="data:,"/>
   <title>Captura de Brechas — Versión Limpia</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#004aad">
+
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -1362,6 +1365,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 })();
 </script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(reg => console.log('SW registrado', reg.scope))
+      .catch(err => console.error('Error SW', err));
+  }
+</script>
+
 
 
 </body>
