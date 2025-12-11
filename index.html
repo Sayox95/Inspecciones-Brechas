@@ -172,7 +172,7 @@
     <h1>Captura de Brechas</h1>
     <span class="muted">Móvil • GPS • Fotos (Drive)</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Actualizar</button>
+      <button id="syncBtn" class="btn btn-ghost" style="padding:8px 10px">🔄 Sincronizar</button>
     </div>
   </header>
 
@@ -297,12 +297,6 @@
     </div>
   </section>
 
-  <div class="bar" style="margin:0.5rem 1rem;">
-    <button id="btnSyncPending" class="btn btn-ghost">
-      Sincronizar pendientes (<span id="pendingCount">0</span>)
-    </button>
-  </div>
-
   <div id="blocker" class="blocker" aria-hidden="true"><div class="box"><span class="spinner"></span><span id="blockerText">Procesando…</span></div></div>
   <div id="toast" class="toast"></div>
 
@@ -348,9 +342,13 @@ function addPending(it){
 }
 
 function updatePendingUI(count){
-  const el = document.getElementById('pendingCount');
-  if (!el) return;
-  el.textContent = count;
+  const btn = document.getElementById('syncBtn');
+  if (!btn) return;
+  if (count > 0){
+    btn.textContent = `🔄 Sincronizar (${count})`;
+  } else {
+    btn.textContent = '🔄 Sincronizar';
+  }
 }
 
 let map, tiles, mapReady=false, pendingRender=false;
@@ -513,14 +511,16 @@ function toProxyImg(u){
   } catch { return u; }
 }
 
-async function syncPendingFromStorage(){
+async function syncPendingFromStorage(opts = {}){
+  const { silent = false } = opts;
+
   let pending = loadPending();
   if (!pending.length){
-    toast('No hay registros pendientes.');
-    return;
+    if (!silent) toast('No hay registros pendientes.');
+    return { pendingBefore: 0, pendingAfter: 0 };
   }
 
-  showBlocker('Sincronizando pendientes…');
+  if (!silent) showBlocker('Sincronizando pendientes…');
 
   const stillPending = [];
 
@@ -536,6 +536,7 @@ async function syncPendingFromStorage(){
         delete it.fotoInicio; delete it.fotoFin;
         delete it.fotoInicioFile; delete it.fotoFinFile;
 
+        // Ya se sincronizó correctamente, lo agregamos al estado y al mapa
         state.items.push(it);
         drawItem(it, false);
       } else {
@@ -549,13 +550,18 @@ async function syncPendingFromStorage(){
 
   savePending(stillPending);
   updatePendingUI(stillPending.length);
-  hideBlocker();
 
-  if (stillPending.length){
-    toast(`⚠️ Quedaron ${stillPending.length} registros sin sincronizar.`);
-  } else {
-    toast('✅ Todos los pendientes fueron sincronizados.');
+  if (!silent){
+    hideBlocker();
+
+    if (stillPending.length){
+      toast(`⚠️ Quedaron ${stillPending.length} registros sin sincronizar.`);
+    } else {
+      toast('✅ Todos los pendientes fueron sincronizados.');
+    }
   }
+
+  return { pendingBefore: pending.length, pendingAfter: stillPending.length };
 }
 
 // -------- Render --------
@@ -862,6 +868,11 @@ document.getElementById('s4-save').onclick = async ()=>{
     // Si no se pudo sincronizar, se guarda en cola offline
     if (!synced){
       addPending(it);
+
+      // Mostrarlo también en el mapa aunque aún no se haya enviado al servidor
+      state.items.push(it);
+      drawItem(it, true);
+
       clearTempMarkers();
       closeSheet();
       toast('📴 Guardado sin conexión. Pendiente de sincronizar.');
@@ -874,7 +885,6 @@ document.getElementById('s4-save').onclick = async ()=>{
   }
 };
 // -------- Eventos UI --------
-$('btnSyncPending') && ($('btnSyncPending').onclick = syncPendingFromStorage);
 $('newTramo').onclick=()=>{ clearWizard(true); openSheet(); setStep(1) };
 $('s1-cancel').onclick=closeSheet;
 $('s1-next').onclick=()=>{ if(!validateStep1()){toast('Completa Sector, Subestación y Circuito.'); return;} setStep(2); };
@@ -891,13 +901,19 @@ $('fotoFin').addEventListener('change', async e=>{
 });
 
 $('syncBtn').addEventListener('click', async ()=>{
-  showBlocker('Actualizando…');
+  showBlocker('Sincronizando…');
   try {
+    // Primero intentamos sincronizar los pendientes en segundo plano
+    await syncPendingFromStorage({ silent: true });
+
+    // Luego recargamos todos los datos desde el servidor
     state.items = (await fetchAllFromServer());
     if (mapReady) renderAllIncremental();
-    toast('✅ Datos actualizados');
+
+    toast('✅ Sincronización completa');
   } catch (e) {
-    console.warn(e); toast('❌ Error al actualizar');
+    console.warn(e);
+    toast('❌ Error al sincronizar/actualizar');
   } finally {
     hideBlocker();
   }
