@@ -1338,7 +1338,7 @@ async function loadCircuitosColored(rawUrl){ try{ const data=await fetchJsonSmar
   return capaCircuitos;
 }catch(e){ console.warn('No se pudo cargar capa de circuitos:', e); if(typeof toast==='function') toast('⚠️ No se pudo cargar capa de circuitos'); return null; } }
 (function waitMapAndLoad(){
-  const url = 'https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOSFINAL.geojson';
+  const url = 'https://raw.githubusercontent.com/Sayox95/TRAMOSMT/main/TRAMOS_MT_DICIEMBRE.geojson';
   const tryLoad=()=>{ if(window.map&&window.L){ try{ if(!map.getPane('circuitos-pane')){ map.createPane('circuitos-pane'); map.getPane('circuitos-pane').style.zIndex=330; } }catch(_){ } loadCircuitosColored(url); return true; } return false; };
   if(!tryLoad()){ const iv=setInterval(()=>{ if(tryLoad()) clearInterval(iv); },250); setTimeout(()=>clearInterval(iv),30000); }
 })();
